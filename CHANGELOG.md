@@ -123,3 +123,4 @@ Each item below is one git commit.
   - **Countdown text:** "Open · closes in …" and "Closed · opens at … IST" are now the i18n keys `countdown.open` / `countdown.closed` (en/hi/mr; Hindi and Marathi still need native review). `formatBetWindow` takes an optional language; Dashboard and SelectionScreen pass the current one.
   - **Sentry:** `beforeSend` also scrubs `event.exception.values[].value` (message text only); `stacktrace` objects are passed through untouched.
   - **Privilege audit:** removed `award_ad_reward` and `get_ad_reward_status` (dropped functions) from the allowlist in `function_privilege_audit.sql`.
+- **Legal:** Terms page replaced with the owner-supplied "Legal Disclaimer & Terms Summary" (5 sections). The Privacy Policy and Contact pages still contain placeholders, so production builds stay blocked until they are replaced. `TERMS_VERSION` stays `2026-11-10` (the site had not launched).
