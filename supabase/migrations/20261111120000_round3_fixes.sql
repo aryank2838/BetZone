@@ -215,3 +215,80 @@ END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.process_close_payouts(text, date)
   FROM PUBLIC, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- R3. Balance, amount, status and reason constraints.
+-- Added NOT VALID, then checked: if existing rows violate a rule the migration
+-- stops and lists them (nothing is changed or "fixed" silently). Then VALIDATE.
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.profiles
+  ADD CONSTRAINT profiles_points_nonnegative CHECK (points >= 0) NOT VALID,
+  ADD CONSTRAINT profiles_wallet_nonnegative CHECK (wallet >= 0) NOT VALID;
+ALTER TABLE public.withdrawals
+  ADD CONSTRAINT withdrawals_amount_positive CHECK (amount > 0) NOT VALID,
+  ADD CONSTRAINT withdrawals_status_valid
+    CHECK (status IN ('pending', 'approved', 'rejected')) NOT VALID;
+ALTER TABLE public.add_funds_requests
+  ADD CONSTRAINT add_funds_requests_amount_positive CHECK (amount > 0) NOT VALID,
+  ADD CONSTRAINT add_funds_requests_status_valid
+    CHECK (status IN ('pending', 'approved', 'rejected')) NOT VALID;
+-- Reasons: every literal inserted by a migration, plus 'ad_reward' (legacy rows
+-- from the removed ad-reward feature).
+ALTER TABLE public.point_ledger
+  ADD CONSTRAINT point_ledger_delta_nonzero CHECK (delta <> 0) NOT VALID,
+  ADD CONSTRAINT point_ledger_reason_valid CHECK (reason IN (
+    'signup_bonus', 'selection_submit', 'winning_payout',
+    'withdrawal_request', 'withdrawal_refund', 'add_funds',
+    'admin_adjust_points', 'admin_adjust_wallet', 'ad_reward'
+  )) NOT VALID;
+
+DO $r3_check$
+DECLARE
+  v_report text := '';
+  v_rows text;
+BEGIN
+  SELECT string_agg(format('profiles %s (points=%s, wallet=%s)', id, points, wallet), '; ')
+  INTO v_rows
+  FROM (SELECT id, points, wallet FROM public.profiles
+        WHERE points < 0 OR wallet < 0 ORDER BY id LIMIT 20) bad;
+  IF v_rows IS NOT NULL THEN v_report := v_report || v_rows || '; '; END IF;
+
+  SELECT string_agg(format('withdrawals %s (amount=%s, status=%s)', id, amount, status), '; ')
+  INTO v_rows
+  FROM (SELECT id, amount, status FROM public.withdrawals
+        WHERE amount <= 0 OR status IS NULL OR status NOT IN ('pending', 'approved', 'rejected')
+        ORDER BY id LIMIT 20) bad;
+  IF v_rows IS NOT NULL THEN v_report := v_report || v_rows || '; '; END IF;
+
+  SELECT string_agg(format('add_funds_requests %s (amount=%s, status=%s)', id, amount, status), '; ')
+  INTO v_rows
+  FROM (SELECT id, amount, status FROM public.add_funds_requests
+        WHERE amount <= 0 OR status IS NULL OR status NOT IN ('pending', 'approved', 'rejected')
+        ORDER BY id LIMIT 20) bad;
+  IF v_rows IS NOT NULL THEN v_report := v_report || v_rows || '; '; END IF;
+
+  SELECT string_agg(format('point_ledger %s (delta=%s, reason=%s)', id, delta, reason), '; ')
+  INTO v_rows
+  FROM (SELECT id, delta, reason FROM public.point_ledger
+        WHERE delta = 0 OR reason NOT IN (
+          'signup_bonus', 'selection_submit', 'winning_payout',
+          'withdrawal_request', 'withdrawal_refund', 'add_funds',
+          'admin_adjust_points', 'admin_adjust_wallet', 'ad_reward')
+        ORDER BY id LIMIT 20) bad;
+  IF v_rows IS NOT NULL THEN v_report := v_report || v_rows || '; '; END IF;
+
+  IF v_report <> '' THEN
+    RAISE EXCEPTION 'R3: existing rows violate the new constraints (first 20 per table): %', v_report
+      USING HINT = 'Review and correct these rows by hand, then re-run the migration.';
+  END IF;
+END
+$r3_check$;
+
+ALTER TABLE public.profiles VALIDATE CONSTRAINT profiles_points_nonnegative;
+ALTER TABLE public.profiles VALIDATE CONSTRAINT profiles_wallet_nonnegative;
+ALTER TABLE public.withdrawals VALIDATE CONSTRAINT withdrawals_amount_positive;
+ALTER TABLE public.withdrawals VALIDATE CONSTRAINT withdrawals_status_valid;
+ALTER TABLE public.add_funds_requests VALIDATE CONSTRAINT add_funds_requests_amount_positive;
+ALTER TABLE public.add_funds_requests VALIDATE CONSTRAINT add_funds_requests_status_valid;
+ALTER TABLE public.point_ledger VALIDATE CONSTRAINT point_ledger_delta_nonzero;
+ALTER TABLE public.point_ledger VALIDATE CONSTRAINT point_ledger_reason_valid;

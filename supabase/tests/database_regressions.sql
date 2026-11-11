@@ -510,10 +510,10 @@ BEGIN
   VALUES
     (v_user1, -100, 'selection_submit', '{"game":"test"}', v_report_date::timestamp AT TIME ZONE 'Asia/Kolkata'),
     (v_user1, 40, 'winning_payout', '{"game":"test"}', v_report_date::timestamp AT TIME ZONE 'Asia/Kolkata'),
-    (v_user1, 60, 'report_fixture_adjustment', '{}', v_report_date::timestamp AT TIME ZONE 'Asia/Kolkata'),
+    (v_user1, 60, 'admin_adjust_wallet', '{}', v_report_date::timestamp AT TIME ZONE 'Asia/Kolkata'),
     (v_user2, -20, 'selection_submit', '{"game":"test2"}', v_report_date::timestamp AT TIME ZONE 'Asia/Kolkata'),
     (v_user2, 5, 'winning_payout', '{"game":"test2"}', v_report_date::timestamp AT TIME ZONE 'Asia/Kolkata'),
-    (v_user2, 15, 'report_fixture_adjustment', '{}', v_report_date::timestamp AT TIME ZONE 'Asia/Kolkata');
+    (v_user2, 15, 'admin_adjust_wallet', '{}', v_report_date::timestamp AT TIME ZONE 'Asia/Kolkata');
   INSERT INTO public.add_funds_requests (user_id, amount, status, payment_ref, processed_at)
   VALUES (v_user1, 200, 'approved', 'REPORTFIXTURE2000', v_report_date::timestamp AT TIME ZONE 'Asia/Kolkata');
   INSERT INTO public.withdrawals (user_id, amount, status, upi_id, processed_at)
@@ -1181,8 +1181,8 @@ VALUES
   ('00000000-0000-4000-8000-000000000003', 'other', 'RLS test fixture ticket');
 INSERT INTO public.point_ledger (user_id, delta, reason)
 VALUES
-  ('00000000-0000-4000-8000-000000000002', 0, 'db-test-rls'),
-  ('00000000-0000-4000-8000-000000000003', 0, 'db-test-rls');
+  ('00000000-0000-4000-8000-000000000002', 1, 'admin_adjust_wallet'),
+  ('00000000-0000-4000-8000-000000000003', 1, 'admin_adjust_wallet');
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000004', true);
@@ -1411,5 +1411,57 @@ BEGIN
 END
 $user_flow_test$;
 RESET ROLE;
+
+-- ---------------------------------------------------------------------------
+-- R3: balance, amount, status and ledger constraints hold even for direct SQL.
+-- ---------------------------------------------------------------------------
+DO $r3_test$
+DECLARE
+  v_user1 uuid := '00000000-0000-4000-8000-000000000002';
+  v_state text;
+  v_constraint text;
+  v_statement text;
+BEGIN
+  FOREACH v_statement IN ARRAY ARRAY[
+    format('UPDATE public.profiles SET wallet = -1 WHERE id = %L', v_user1),
+    format('UPDATE public.profiles SET points = -1 WHERE id = %L', v_user1),
+    format('INSERT INTO public.withdrawals (user_id, amount, status, upi_id) VALUES (%L, 0, %L, %L)', v_user1, 'rejected', 'r3@bank'),
+    format('INSERT INTO public.withdrawals (user_id, amount, status, upi_id) VALUES (%L, 10, %L, %L)', v_user1, 'paid', 'r3@bank'),
+    format('INSERT INTO public.add_funds_requests (user_id, amount, status, payment_ref) VALUES (%L, -5, %L, %L)', v_user1, 'rejected', 'R3NEGATIVE1'),
+    format('INSERT INTO public.add_funds_requests (user_id, amount, status, payment_ref) VALUES (%L, 5, %L, %L)', v_user1, 'done', 'R3BADSTATUS1'),
+    format('INSERT INTO public.point_ledger (user_id, delta, reason) VALUES (%L, 0, %L)', v_user1, 'add_funds'),
+    format('INSERT INTO public.point_ledger (user_id, delta, reason) VALUES (%L, 5, %L)', v_user1, 'made_up_reason')
+  ] LOOP
+    v_state := NULL;
+    BEGIN
+      EXECUTE v_statement;
+    EXCEPTION WHEN check_violation THEN
+      GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_constraint = CONSTRAINT_NAME;
+    END;
+    IF v_state IS DISTINCT FROM '23514' THEN
+      RAISE EXCEPTION 'R3: statement was not rejected by a check constraint: %', v_statement;
+    END IF;
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname IN (
+      'profiles_points_nonnegative', 'profiles_wallet_nonnegative',
+      'withdrawals_amount_positive', 'withdrawals_status_valid',
+      'add_funds_requests_amount_positive', 'add_funds_requests_status_valid',
+      'point_ledger_delta_nonzero', 'point_ledger_reason_valid')
+      AND NOT convalidated
+  ) OR (
+    SELECT count(*) FROM pg_constraint
+    WHERE conname IN (
+      'profiles_points_nonnegative', 'profiles_wallet_nonnegative',
+      'withdrawals_amount_positive', 'withdrawals_status_valid',
+      'add_funds_requests_amount_positive', 'add_funds_requests_status_valid',
+      'point_ledger_delta_nonzero', 'point_ledger_reason_valid')
+  ) <> 8 THEN
+    RAISE EXCEPTION 'R3: a money constraint is missing or still NOT VALID';
+  END IF;
+END
+$r3_test$;
 
 ROLLBACK;
