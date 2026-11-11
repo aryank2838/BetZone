@@ -106,6 +106,12 @@ WHERE id = '<uuid>';
 
 Only a trusted project owner should grant the first admin role. Use the user's verified Auth UUID, keep the SQL Editor session private, and confirm the expected profile before executing the statement.
 
+## Deleting users and account deletion requests
+
+Users are never deleted to close an account: **admins ban instead** (Users tab → Ban). The `user_id` foreign keys of `point_ledger`, `withdrawals`, `add_funds_requests` and `selections` are `ON DELETE RESTRICT` (migration `20261111120000`), so deleting an Auth user who has any money or bet history fails, and that history is kept for audits, disputes and reconciliation. Users without such history (for example, never-confirmed signups) can still be deleted; `profiles`, `user_limits`, `support_tickets` and `user_ledger_opening_balances` still cascade.
+
+Account deletion requests (for example under privacy law) need a **manual process** run by the project owner: verify the requester, settle or refund any remaining balance, ban the account, and decide with counsel which personal data can be erased or anonymised and which financial records must be retained. There is no in-app deletion.
+
 ## Support-only self-exclusion unlock
 
 Self-exclusion must not be lifted through normal user or admin controls. It expires automatically at its stored end timestamp. If an early unlock is ever required for a documented legal/support exception, route it through the project owner and a restricted support-only operational process with identity verification and an audit record; do not expose an unlock action or direct table write in the application admin UI.

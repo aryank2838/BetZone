@@ -1464,4 +1464,77 @@ BEGIN
 END
 $r3_test$;
 
+-- ---------------------------------------------------------------------------
+-- R4: deleting an Auth user with financial history fails (ON DELETE RESTRICT);
+-- a user without history can still be deleted.
+-- ---------------------------------------------------------------------------
+INSERT INTO auth.users (
+  id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data
+)
+VALUES
+  ('00000000-0000-4000-8000-000000000006', 'authenticated', 'authenticated',
+   'db-test-user6@example.invalid', '', now(), '{}',
+   '{"display_name":"DB test user 6","accepted_terms":true,"terms_version":"test"}'),
+  ('00000000-0000-4000-8000-000000000007', 'authenticated', 'authenticated',
+   'db-test-user7@example.invalid', '', NULL, '{}',
+   '{"display_name":"DB test user 7","accepted_terms":true,"terms_version":"test"}');
+
+DO $r4_test$
+DECLARE
+  v_user6 uuid := '00000000-0000-4000-8000-000000000006';
+  v_user7 uuid := '00000000-0000-4000-8000-000000000007';
+  v_state text;
+  v_table text;
+BEGIN
+  INSERT INTO public.point_ledger (user_id, delta, reason, metadata)
+  VALUES (v_user6, 5, 'admin_adjust_wallet', '{"test":"r4"}');
+
+  v_state := NULL;
+  BEGIN
+    DELETE FROM auth.users WHERE id = v_user6;
+  EXCEPTION WHEN foreign_key_violation THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE;
+  END;
+  IF v_state IS DISTINCT FROM '23503' THEN
+    RAISE EXCEPTION 'R4: deleting a user with ledger rows was not blocked';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.point_ledger WHERE user_id = v_user6)
+     OR NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = v_user6) THEN
+    RAISE EXCEPTION 'R4: a blocked delete still removed the user''s rows';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.point_ledger WHERE user_id = v_user7) THEN
+    RAISE EXCEPTION 'R4 fixture: unconfirmed user 7 unexpectedly has ledger rows';
+  END IF;
+  DELETE FROM auth.users WHERE id = v_user7;
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE id = v_user7) THEN
+    RAISE EXCEPTION 'R4: deleting a user without history did not cascade to profiles';
+  END IF;
+
+  FOREACH v_table IN ARRAY ARRAY['point_ledger', 'withdrawals', 'add_funds_requests', 'selections'] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint c
+      WHERE c.contype = 'f'
+        AND c.conrelid = format('public.%I', v_table)::regclass
+        AND c.confrelid = 'auth.users'::regclass
+        AND c.confdeltype = 'r'
+    ) THEN
+      RAISE EXCEPTION 'R4: public.% user_id foreign key is not ON DELETE RESTRICT', v_table;
+    END IF;
+  END LOOP;
+  FOREACH v_table IN ARRAY ARRAY['profiles', 'user_limits', 'support_tickets', 'user_ledger_opening_balances'] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint c
+      WHERE c.contype = 'f'
+        AND c.conrelid = format('public.%I', v_table)::regclass
+        AND c.confrelid = 'auth.users'::regclass
+        AND c.confdeltype = 'c'
+    ) THEN
+      RAISE EXCEPTION 'R4: public.% should keep ON DELETE CASCADE', v_table;
+    END IF;
+  END LOOP;
+END
+$r4_test$;
+
 ROLLBACK;

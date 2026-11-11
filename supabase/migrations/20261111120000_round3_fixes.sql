@@ -292,3 +292,36 @@ ALTER TABLE public.add_funds_requests VALIDATE CONSTRAINT add_funds_requests_amo
 ALTER TABLE public.add_funds_requests VALIDATE CONSTRAINT add_funds_requests_status_valid;
 ALTER TABLE public.point_ledger VALIDATE CONSTRAINT point_ledger_delta_nonzero;
 ALTER TABLE public.point_ledger VALIDATE CONSTRAINT point_ledger_reason_valid;
+
+-- ---------------------------------------------------------------------------
+-- R4 (DECISION). Keep financial history when an Auth user is deleted.
+-- The user_id foreign keys of these four tables become ON DELETE RESTRICT, so
+-- deleting a user with money or bet history fails; admins ban instead.
+-- profiles, user_limits, support_tickets and user_ledger_opening_balances keep
+-- ON DELETE CASCADE.
+-- ---------------------------------------------------------------------------
+DO $r4_fks$
+DECLARE
+  v_table text;
+  v_constraint text;
+BEGIN
+  FOREACH v_table IN ARRAY ARRAY['point_ledger', 'withdrawals', 'add_funds_requests', 'selections'] LOOP
+    SELECT c.conname INTO v_constraint
+    FROM pg_constraint c
+    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+    WHERE c.contype = 'f'
+      AND c.conrelid = format('public.%I', v_table)::regclass
+      AND c.confrelid = 'auth.users'::regclass
+      AND a.attname = 'user_id'
+      AND array_length(c.conkey, 1) = 1;
+    IF v_constraint IS NULL THEN
+      RAISE EXCEPTION 'R4: no user_id -> auth.users foreign key found on public.%', v_table;
+    END IF;
+    EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT %I', v_table, v_constraint);
+    EXECUTE format(
+      'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE RESTRICT',
+      v_table, v_constraint
+    );
+  END LOOP;
+END
+$r4_fks$;
