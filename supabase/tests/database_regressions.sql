@@ -1537,4 +1537,64 @@ BEGIN
 END
 $r4_test$;
 
+-- ---------------------------------------------------------------------------
+-- R6: settlement, the liability check and exposure all use bet_multiplier().
+-- ---------------------------------------------------------------------------
+DO $r6_test$
+DECLARE
+  v_admin uuid := '00000000-0000-4000-8000-000000000001';
+  v_bet_type text;
+  v_error text;
+  v_def text;
+  v_function text;
+  v_exposure jsonb;
+  v_row jsonb;
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+
+  -- Settlement: every payout written by settle_bets used bet_multiplier().
+  IF NOT EXISTS (SELECT 1 FROM public.point_ledger WHERE reason = 'winning_payout' AND metadata ? 'multiplier') THEN
+    RAISE EXCEPTION 'R6: earlier settlement tests produced no payouts to compare';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.point_ledger
+    WHERE reason = 'winning_payout' AND metadata ? 'multiplier'
+      AND (metadata->>'multiplier')::integer IS DISTINCT FROM public.bet_multiplier(metadata->>'bet_type')
+  ) THEN
+    RAISE EXCEPTION 'R6: a settlement payout used a multiplier different from bet_multiplier()';
+  END IF;
+  FOREACH v_bet_type IN ARRAY ARRAY['single_open', 'single_close', 'jodi', 'patti_open', 'patti_close'] LOOP
+    v_error := NULL;
+    BEGIN
+      PERFORM public.settle_bets('test', date '2000-01-01', v_bet_type, '0', public.bet_multiplier(v_bet_type) + 1);
+    EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT;
+    END;
+    IF v_error IS NULL OR v_error NOT LIKE 'Multiplier % does not match bet_multiplier%' THEN
+      RAISE EXCEPTION 'R6: settle_bets accepted a multiplier that differs from bet_multiplier(%)', v_bet_type;
+    END IF;
+  END LOOP;
+
+  -- Liability check and exposure: no hard-coded payout multipliers remain.
+  FOREACH v_function IN ARRAY ARRAY[
+    'public.submit_selection(text, jsonb, text)',
+    'public.admin_get_exposure(text, date)',
+    'public.process_open_payouts(text, date)',
+    'public.process_close_payouts(text, date)'
+  ] LOOP
+    v_def := pg_get_functiondef(v_function::regprocedure);
+    IF v_def !~ 'bet_multiplier\(' OR v_def ~ 'THEN (9|90|120)\M' OR v_def ~ ', (9|90|120)\)' THEN
+      RAISE EXCEPTION 'R6: % does not take its multiplier from bet_multiplier()', v_function;
+    END IF;
+  END LOOP;
+
+  v_exposure := public.admin_get_exposure('test', (clock_timestamp() AT TIME ZONE 'Asia/Kolkata')::date - 2);
+  FOR v_row IN SELECT * FROM jsonb_array_elements(v_exposure->'exposure') LOOP
+    IF (v_row->>'potential_payout')::bigint
+       <> (v_row->>'total_stake')::bigint * public.bet_multiplier(v_row->>'bet_type') THEN
+      RAISE EXCEPTION 'R6: exposure payout differs from stake * bet_multiplier(): %', v_row;
+    END IF;
+  END LOOP;
+END
+$r6_test$;
+
 ROLLBACK;
