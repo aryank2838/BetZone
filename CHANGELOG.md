@@ -125,3 +125,10 @@ Each item below is one git commit.
   - **Privilege audit:** removed `award_ad_reward` and `get_ad_reward_status` (dropped functions) from the allowlist in `function_privilege_audit.sql`.
 - **Legal:** Terms page replaced with the owner-supplied "Legal Disclaimer & Terms Summary" (5 sections). The Privacy Policy and Contact pages still contain placeholders, so production builds stay blocked until they are replaced. `TERMS_VERSION` stays `2026-11-10` (the site had not launched).
 - **Legal:** Privacy Policy replaced with the owner-supplied text (effective 11 November 2026), and the Contact page now shows the support email (`SUPPORT_EMAIL` in `LegalPage.tsx`). No placeholders remain, so production builds pass without `ALLOW_PLACEHOLDER_LEGAL`.
+
+## 2026-11-11 — Live feedback fixes
+
+- **Admin "Something went wrong" on every tab:** the admin panel asked for stats before today's date had loaded, sending an empty date that Postgres rejects (`invalid input syntax for type date`). The shared error banner then stayed on the Results, Requests and Users tabs. `loadStats` now waits for a date, the banner clears when switching tabs, and every admin error names what failed and shows the technical detail (message, code, details, hint).
+- **Payment screenshot required:** the Add money form needs a screenshot and a valid UTR before "Send for checking" is enabled. Migration `20261111140000_require_payment_screenshot.sql` makes `request_add_funds` reject requests without a screenshot ("Please upload a screenshot of your payment.") or whose file was never uploaded to the `payment-screenshots` bucket. Existing requests are unchanged.
+- **Times with AM/PM:** schedule times show as "8:00 AM IST" (`formatClockTime` in `countdown.ts`) on game cards, the betting screen and screen-reader announcements.
+- **Plainer wording:** balance page, Add money form, game cards, bet slip and common error messages rewritten in plain English, with amounts shown in ₹. Hindi and Marathi keep their meaning; the new countdown and screenshot strings still need native review.

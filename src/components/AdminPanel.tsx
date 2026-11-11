@@ -26,9 +26,24 @@ interface AdminPanelProps {
   initialTab?: 'results' | 'requests' | 'users' | 'selections' | 'stats' | 'settings' | 'support' | 'reports';
 }
 
-function errorNotice(error: unknown) {
-  const { message, raw } = friendlyErrorDetails(error);
-  return { kind: 'err' as const, text: message, raw };
+/** Technical text for admins: message plus Postgres/PostgREST code, details and hint. */
+function technicalErrorText(error: unknown): string {
+  if (!error || typeof error !== 'object') return String(error ?? '');
+  const record = error as Record<string, unknown>;
+  const parts = [record.message, record.code && `code ${String(record.code)}`, record.details, record.hint]
+    .filter((part): part is string => typeof part === 'string' && part.trim() !== '');
+  return parts.join(' · ') || 'No details were returned (check your internet connection).';
+}
+
+/** Admin-only error notice: names what failed and always shows the technical detail. */
+function errorNotice(error: unknown, action?: string) {
+  const { message } = friendlyErrorDetails(error);
+  console.error(action ? `Admin: could not ${action}` : 'Admin action failed', error);
+  return {
+    kind: 'err' as const,
+    text: action ? `Couldn't ${action}. ${message}` : message,
+    raw: technicalErrorText(error),
+  };
 }
 
 interface PayoutResult {
@@ -319,7 +334,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
   const loadLatest = async (g: string) => {
     const { data, error } = await supabase.rpc('get_latest_results', { p_game: g });
     if (error) {
-      setMessage(errorNotice(error));
+      setMessage(errorNotice(error, 'load the latest result'));
       setLatestResult(null);
       return;
     }
@@ -357,7 +372,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
       supabase.rpc('admin_list_add_funds', requestListArgs(addFundsFilter, 0)),
     ]);
     if (wd.error || af.error) {
-      setMessage(errorNotice(wd.error ?? af.error));
+      setMessage(errorNotice(wd.error ?? af.error, wd.error ? 'load withdrawal requests' : 'load add-money requests'));
     }
     if (!wd.error && wd.data) {
       const rows = wd.data as WithdrawalRequest[];
@@ -379,7 +394,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
     const { data, error } = kind === 'withdrawals'
       ? await supabase.rpc('admin_list_withdrawals', requestListArgs(withdrawalFilter, offset))
       : await supabase.rpc('admin_list_add_funds', requestListArgs(addFundsFilter, offset));
-    if (error) setMessage(errorNotice(error));
+    if (error) setMessage(errorNotice(error, 'load more requests'));
     if (!error && data) {
       if (kind === 'withdrawals') {
         const rows = data as WithdrawalRequest[];
@@ -395,10 +410,14 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
   };
 
   const loadStats = useCallback(async (date = statsRoundDate) => {
+    // The round date is filled in once the game schedule loads; asking before
+    // that sent an empty date, which the database rejects ("invalid input
+    // syntax for type date") and showed "Something went wrong" on every tab.
+    if (!date) return;
     setLoadingStats(true);
     const { data, error } = await supabase.rpc('admin_get_stats', { p_round_date: date });
     if (!error && data) setStats(data as AdminStats);
-    if (error) setMessage(errorNotice(error));
+    if (error) setMessage(errorNotice(error, 'load stats'));
     setLoadingStats(false);
   }, [statsRoundDate]);
 
@@ -412,7 +431,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
       p_limit: 50,
       p_offset: 0,
     });
-    if (error) setMessage(errorNotice(error));
+    if (error) setMessage(errorNotice(error, 'load users'));
     if (!error && data) {
       const rows = data as AdminUser[];
       setUsers(rows);
@@ -428,7 +447,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
       p_search: userSearch || null, p_status: userStatus || null,
       p_from: userFrom || null, p_to: userTo || null, p_limit: 50, p_offset: users.length,
     });
-    if (error) setMessage(errorNotice(error));
+    if (error) setMessage(errorNotice(error, 'load more users'));
     if (!error && data) {
       const rows = data as AdminUser[];
       setUsers((previous) => [...previous, ...rows]);
@@ -441,7 +460,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
     if (!date) return;
     setLoadingSelections(true);
     const { data, error } = await supabase.rpc('admin_list_selections', { p_game: g, p_round_date: date });
-    if (error) setMessage(errorNotice(error));
+    if (error) setMessage(errorNotice(error, 'load bets for this round'));
     if (!error && data) setSelections(data as AdminSelection[]);
     setLoadingSelections(false);
   };
@@ -619,7 +638,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
       setOpenedScreenshots((current) => new Set(current).add(path));
     } catch (error) {
       setScreenshotUrl(null);
-      setMessage(errorNotice(error));
+      setMessage(errorNotice(error, 'open the screenshot'));
     }
     setScreenshotLoading(false);
   };
@@ -663,7 +682,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
             return (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => { setTab(t.id); setMessage(null); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
                   tab === t.id ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800'
                 }`}
