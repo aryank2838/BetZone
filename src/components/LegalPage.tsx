@@ -47,8 +47,8 @@ const CONTENT: Record<LegalDocument, { title: string; sections: LegalSection[] }
         text: 'We collect information to provide a secure and customized experience:',
         bullets: [
           'Account Information: Name, email address, age verification data, and profile settings.',
-          'Financial Data: Deposit and withdrawal transaction history, payment reference tokens, and ledger entries. (We do not store your complete banking credentials or raw payment methods on our servers).',
-          'Technical Information: IP address, device type, browser settings, and regional location data to ensure legal compliance.',
+          'Financial Data: Deposit and withdrawal transaction history, payment reference numbers (UTR), the UPI ID you provide for withdrawals, payment screenshots you upload with deposit requests, and ledger entries. (We do not store your banking passwords, PINs, or card details).',
+          'Technical Information: Basic session data stored in your browser (such as your sign-in session, language choice, and last-activity time). If error reporting is enabled, technical details of app errors are sent with personal details such as email addresses and UPI IDs removed.',
         ],
       },
       {
@@ -57,7 +57,7 @@ const CONTENT: Record<LegalDocument, { title: string; sections: LegalSection[] }
         bullets: [
           'Account Management: Creating your profile, handling secure log-ins, and maintaining your platform wallet.',
           'Responsible Play Enforcement: Enforcing daily deposit caps, loss limits, or self-exclusion requests that you choose to configure.',
-          'Legal and Security Compliance: Preventing fraudulent activities, multi-account abuse, and verifying that you are accessing our services from a permitted jurisdiction.',
+          'Legal and Security Compliance: Preventing fraudulent activities and multi-account abuse, verifying deposits against payment references and screenshots, and paying withdrawals to the UPI ID you provide.',
         ],
       },
       {
@@ -70,13 +70,13 @@ const CONTENT: Record<LegalDocument, { title: string; sections: LegalSection[] }
       },
       {
         heading: '4. Cookies and Session Data',
-        text: 'We use local storage keys and basic security cookies to ensure you stay securely logged into your account across browser tabs. These tokens do not track your activity on external websites and expire automatically after 30 minutes of complete inactivity.',
+        text: 'We use your browser\'s local storage to keep you securely logged in across browser tabs. This data does not track your activity on external websites. You are signed out automatically after 30 minutes of complete inactivity, and your stored session is cleared when you sign out.',
       },
       {
         heading: '5. Sharing of Data',
         text: 'We do not sell, rent, or trade your personal information to third parties. Data is shared only under the following limited conditions:',
         bullets: [
-          'Service Providers: Payment gateways or infrastructure providers necessary to process your financial transactions.',
+          'Service Providers: Infrastructure providers that host and run the platform for us: Supabase (database, sign-in, and file storage), Netlify (website hosting), and, if enabled, Sentry (error reporting). Deposits and withdrawals are made by direct UPI transfer; we do not use a third-party payment gateway.',
           'Legal Obligation: If requested by law enforcement, regulatory bodies, or a court order within a legally binding jurisdiction.',
         ],
       },
