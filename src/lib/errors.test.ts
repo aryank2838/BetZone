@@ -8,16 +8,16 @@ import { translate, type Language, type TranslationKey } from '@/i18n/context';
 
 describe('friendlyError', () => {
   it.each([
-    ['Insufficient balance. You have 2.', 'You do not have enough balance for these picks.', 'add_funds'],
-    ['Betting is closed for this bet type right now.', 'Betting has closed for this bet type.', 'retry'],
-    ['Your account is banned. Contact support.', 'Your account is restricted. Contact support for help.', 'help'],
-    ['Minimum withdrawal amount is 100.', 'The withdrawal amount is below the minimum.', 'help'],
-    ['A pending request already exists.', 'You already have a request being reviewed. Please wait for it to be processed.', undefined],
-    ['Invalid number', 'Check the number and try again.', undefined],
-    ['Payment reference must be 8 to 30 letters or numbers', 'Enter an 8–30 character payment reference using letters or numbers.', undefined],
-    ['Round stake limit exceeded', 'This request exceeds the allowed limit. Reduce the amount and try again.', undefined],
-    ['Not authenticated', 'Please sign in again to continue.', 'login'],
-    ['Failed to fetch', 'Connection problem. Check your internet and try again.', 'retry'],
+    ['Insufficient balance. You have 2.', "You don't have enough balance for these bets. Add money or lower your bet.", 'add_funds'],
+    ['Betting is closed for this bet type right now.', 'Betting for this is closed right now.', 'retry'],
+    ['Your account is banned. Contact support.', 'Your account has been blocked. Please contact support.', 'help'],
+    ['Minimum withdrawal amount is 100.', 'This amount is below the minimum you can withdraw.', 'help'],
+    ['A pending request already exists.', "You already have a request being checked. Please wait until it's done.", undefined],
+    ['Invalid number', "That number isn't valid. Please check it and try again.", undefined],
+    ['Payment reference must be 8 to 30 letters or numbers', 'Please enter the UTR number from your payment app (8–30 letters or numbers, usually 12 digits).', undefined],
+    ['Round stake limit exceeded', "That's more than the allowed limit. Please lower the amount and try again.", undefined],
+    ['Not authenticated', 'Your session has ended. Please sign in again.', 'login'],
+    ['Failed to fetch', 'You seem to be offline. Check your internet connection and try again.', 'retry'],
   ])('maps %s', (raw, message, action) => {
     const result = friendlyError(new Error(raw));
     expect(result.message).toBe(message);
@@ -27,12 +27,12 @@ describe('friendlyError', () => {
   it('uses a generic message for unknown errors and exposes raw details separately', () => {
     const error = new Error('unexpected database failure');
     expect(friendlyError(error)).toMatchObject({
-      message: 'Something went wrong. Please try again.',
+      message: 'Something went wrong on our side. Please try again in a moment.',
       key: 'errors.generic',
     });
     expect(rawErrorMessage(error)).toBe('unexpected database failure');
     expect(friendlyErrorDetails(error)).toMatchObject({
-      message: 'Something went wrong. Please try again.',
+      message: 'Something went wrong on our side. Please try again in a moment.',
       raw: 'unexpected database failure',
     });
   });
@@ -141,6 +141,6 @@ describe('server timestamps in error messages', () => {
     expect(formatServerTimestamp('not a date')).toBe('not a date');
 
     const result = friendlyError(new Error('Betting is paused until 2026-11-11 04:30:00.123456+00 due to your cooldown.'));
-    expect(result.message).toBe(`Betting is paused until ${formatted} because of your cooldown.`);
+    expect(result.message).toBe(`You're on a betting break until ${formatted}. You can bet again after that.`);
   });
 });

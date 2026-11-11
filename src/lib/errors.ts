@@ -97,6 +97,12 @@ export function friendlyError(error: unknown): FriendlyError {
   if (depositMinimum) {
     return mappedError('errors.depositRequirement', 'add_funds', { points: depositMinimum[1] });
   }
+  if (message === 'please upload a screenshot of your payment.') {
+    return mappedError('errors.screenshotRequired');
+  }
+  if (message === 'we could not find your payment screenshot. please upload it again.') {
+    return mappedError('errors.screenshotMissing', 'retry');
+  }
   if (message === 'this payment reference has already been used.') {
     return mappedError('errors.duplicateReference', 'help');
   }

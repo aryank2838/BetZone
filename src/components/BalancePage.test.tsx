@@ -55,24 +55,38 @@ function mockBackend(merchantUpiId: string | null) {
 }
 
 describe('BalancePage modal messages', () => {
-  it('explains why Add funds is unavailable when no merchant UPI ID is configured', async () => {
+  it('explains why adding money is unavailable when no merchant UPI ID is configured', async () => {
     mockBackend(null);
     render(<BalancePage onBack={vi.fn()} onBalanceChanged={vi.fn()} />);
-    expect(await screen.findByText(/Adding funds is not available yet/)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /add funds/i })[0]).toBeDisabled();
+    expect(await screen.findByText(/Adding money isn't available right now/)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /add money/i })[0]).toBeDisabled();
   });
 
-  it('renders add-funds validation errors inside the open modal', async () => {
+  it('requires both a payment screenshot and a UTR number before sending', async () => {
     mockBackend('payments@bank');
     render(<BalancePage onBack={vi.fn()} onBalanceChanged={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: /add funds/i }));
+    fireEvent.click((await screen.findAllByRole('button', { name: /add money/i }))[0]);
 
-    const dialog = screen.getByRole('dialog', { name: 'Add funds' });
+    const dialog = screen.getByRole('dialog', { name: 'Add money' });
+    const send = within(dialog).getByRole('button', { name: 'Send for checking' });
     fireEvent.change(within(dialog).getByPlaceholderText('e.g. 500'), { target: { value: '10' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Submit for approval' }));
+    expect(within(dialog).getByText(/Payment screenshot/)).toHaveTextContent('(required)');
+    expect(within(dialog).getByText(/UTR number/, { selector: 'label' })).toHaveTextContent('(required)');
+    expect(send).toBeDisabled();
 
-    await waitFor(() => {
-      expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter an 8–30 character payment reference using letters or numbers.');
-    });
+    // UTR alone is not enough.
+    fireEvent.change(within(dialog).getByPlaceholderText('e.g. 412345678901'), { target: { value: '412345678901' } });
+    expect(send).toBeDisabled();
+
+    // Screenshot alone is not enough either.
+    fireEvent.change(within(dialog).getByPlaceholderText('e.g. 412345678901'), { target: { value: '' } });
+    const fileInput = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [new File(['x'], 'proof.png', { type: 'image/png' })] } });
+    expect(await within(dialog).findByText('Screenshot added')).toBeInTheDocument();
+    expect(send).toBeDisabled();
+
+    // Both present: the button is enabled.
+    fireEvent.change(within(dialog).getByPlaceholderText('e.g. 412345678901'), { target: { value: '412345678901' } });
+    await waitFor(() => expect(send).toBeEnabled());
   });
 });

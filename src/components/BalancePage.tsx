@@ -134,11 +134,11 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
     const file = e.target.files?.[0];
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setMessage({ kind: 'err', text: 'Please select a JPG, PNG or WebP image.' });
+      setMessage({ kind: 'err', text: 'Please choose a photo (JPG, PNG or WebP).' });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setMessage({ kind: 'err', text: 'Image must be 5 MB or smaller.' });
+      setMessage({ kind: 'err', text: 'This photo is too big. Please choose one under 5 MB.' });
       return;
     }
     setScreenshotFile(file);
@@ -151,7 +151,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
   const uploadScreenshot = async (): Promise<string | null> => {
     if (!screenshotFile || !profile) return null;
     if (addFunds.some((request) => request.status === 'pending')) {
-      setMessage({ kind: 'err', text: 'Wait for your pending add-funds request to be processed before uploading another screenshot.' });
+      setMessage({ kind: 'err', text: 'You already have a payment being checked. Please wait for it to finish before adding money again.' });
       return null;
     }
     const EXT: Record<string, string> = {
@@ -161,7 +161,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
     };
     const ext = EXT[screenshotFile.type];
     if (!ext) {
-      setMessage({ kind: 'err', text: 'Upload a JPG, PNG or WebP image.' });
+      setMessage({ kind: 'err', text: 'Please choose a photo (JPG, PNG or WebP).' });
       return null;
     }
 
@@ -211,7 +211,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
       setCopiedUpi(true);
       setTimeout(() => setCopiedUpi(false), 2000);
     } catch {
-      setMessage({ kind: 'err', text: 'Could not copy. Please copy the UPI ID manually.' });
+      setMessage({ kind: 'err', text: "Couldn't copy. Please copy the UPI ID yourself." });
     }
   };
 
@@ -219,19 +219,23 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
     if (modal !== 'add') return;
     const parsedAmount = Number(amount);
     if (!/^[0-9]+$/.test(amount) || !Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
-      setMessage({ kind: 'err', text: 'Enter a positive whole-number amount using digits only.' });
+      setMessage({ kind: 'err', text: 'Please enter an amount in whole rupees, like 500.' });
       return;
     }
     if (!breakdown || parsedAmount > breakdown.max_add_funds_amount) {
-      setMessage({ kind: 'err', text: `Maximum add-funds amount is ${breakdown?.max_add_funds_amount ?? 'unavailable'}.` });
+      setMessage({ kind: 'err', text: `You can add up to ₹${breakdown ? formatNumber(breakdown.max_add_funds_amount) : '—'} at a time.` });
       return;
     }
     if (!/^[0-9A-Za-z]{8,30}$/.test(upiOrRef.trim())) {
-      setMessage({ kind: 'err', text: 'Enter an 8–30 character payment reference using letters or numbers.' });
+      setMessage({ kind: 'err', text: 'Please enter the UTR number from your payment app. It is 8–30 letters or numbers, usually 12 digits.' });
+      return;
+    }
+    if (!screenshotFile) {
+      setMessage({ kind: 'err', text: 'Please upload a screenshot of your payment.' });
       return;
     }
     if (!merchantUpiId) {
-      setMessage({ kind: 'err', text: 'Deposits are temporarily unavailable.' });
+      setMessage({ kind: 'err', text: 'Adding money isn\'t available right now.' });
       return;
     }
 
@@ -239,15 +243,12 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
     setMessage(null);
     let uploadedScreenshotPath: string | null = null;
     try {
-      let path: string | null = null;
-      if (screenshotFile) {
-        path = await uploadScreenshot();
-        if (!path && screenshotFile) {
-          setSubmitting(false);
-          return;
-        }
-        uploadedScreenshotPath = path;
+      const path = await uploadScreenshot();
+      if (!path) {
+        setSubmitting(false);
+        return;
       }
+      uploadedScreenshotPath = path;
       const { error } = await supabase.rpc('request_add_funds', {
         p_amount: parsedAmount,
         p_payment_ref: upiOrRef.trim(),
@@ -259,7 +260,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
       await load();
       await userRequests.refresh();
       onBalanceChanged();
-      setMessage({ kind: 'ok', text: 'Add-funds request sent for approval.' });
+      setMessage({ kind: 'ok', text: 'Thanks! We\'re checking your payment. The money will be added to your balance once it\'s confirmed.' });
     } catch (err) {
       const friendly = friendlyError(err);
       const msg = friendly.message;
@@ -308,8 +309,8 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
           <>
             {restriction && (
               <div className="rounded-xl border border-amber-800 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
-                {restriction.kind === 'cooldown' ? 'Betting break active' : 'Self-exclusion active'} until {formatLimitEnd(restriction.until)}.
-                {selfExcluded && ' Deposits are disabled; withdrawals remain available.'}
+                {restriction.kind === 'cooldown' ? 'You are on a betting break' : 'You have paused your account'} until {formatLimitEnd(restriction.until)}.
+                {selfExcluded && ' You can\'t add money during this time, but you can still withdraw.'}
               </div>
             )}
             {/* Hero total */}
@@ -318,19 +319,18 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                 <Wallet className="w-32 h-32 -mr-8 -mt-8" />
               </div>
               <div className="relative">
-                <p className="text-xs font-medium uppercase tracking-widest text-slate-400 mb-1">Total Balance</p>
+                <p className="text-xs font-medium uppercase tracking-widest text-slate-400 mb-1">Your total balance</p>
                 <div className="flex items-baseline gap-2">
-                  <p className="text-5xl font-bold tracking-tight text-white">{formatNumber(breakdown.play_balance + breakdown.wallet)}</p>
-                  <p className="text-slate-400">balance</p>
+                  <p className="text-5xl font-bold tracking-tight text-white">₹{formatNumber(breakdown.play_balance + breakdown.wallet)}</p>
                 </div>
                 <div className="flex gap-6 mt-5">
                   <div>
-                    <p className="text-[11px] text-slate-400">Play balance</p>
-                    <p className="text-lg font-semibold text-cyan-400">{formatNumber(breakdown.play_balance)}</p>
+                    <p className="text-[11px] text-slate-400">For betting only</p>
+                    <p className="text-lg font-semibold text-cyan-400">₹{formatNumber(breakdown.play_balance)}</p>
                   </div>
                   <div className="border-l border-slate-700 pl-6">
-                    <p className="text-[11px] text-slate-400">Withdrawable</p>
-                    <p className="text-lg font-semibold text-emerald-400">{formatNumber(breakdown.wallet)}</p>
+                    <p className="text-[11px] text-slate-400">Can be withdrawn</p>
+                    <p className="text-lg font-semibold text-emerald-400">₹{formatNumber(breakdown.wallet)}</p>
                   </div>
                 </div>
               </div>
@@ -343,7 +343,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                 disabled={selfExcluded || !merchantUpiId}
                 className="flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-bold hover:from-emerald-400 hover:to-emerald-500 transition-all shadow-lg shadow-emerald-500/15 disabled:opacity-40"
               >
-                <Plus className="w-4 h-4" /> Add funds
+                <Plus className="w-4 h-4" /> Add money
               </button>
               <button
                 onClick={() => { setModal('withdraw'); setMessage(null); setAmount(''); setUpiOrRef(''); }}
@@ -357,7 +357,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
               <div role="status" className="rounded-xl border border-amber-900 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
                 {profile?.is_admin ? (
                   <>
-                    <p>Add funds is turned off because no merchant UPI ID is saved. Users cannot deposit until you add one.</p>
+                    <p>Add money is switched off because your UPI ID isn't saved yet. Players can't add money until you save it.</p>
                     {onOpenAdminSettings && (
                       <button type="button" onClick={onOpenAdminSettings} className="mt-2 min-h-[44px] rounded-lg border border-amber-700 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-900/40">
                         Open Admin → Settings
@@ -365,13 +365,13 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                     )}
                   </>
                 ) : (
-                  <p>Adding funds is not available yet. Please try again later or contact support.</p>
+                  <p>Adding money isn't available right now. Please try again later, or contact support.</p>
                 )}
               </div>
             )}
             {selfExcluded && (
               <p className="rounded-xl border border-amber-900 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
-                Deposits are disabled until {formatLimitEnd(limits!.self_excluded_until!)} because of your self-exclusion.
+                You paused your account, so you can't add money until {formatLimitEnd(limits!.self_excluded_until!)}.
               </p>
             )}
             {message && !modal && (
@@ -385,19 +385,19 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
             )}
             {modal === 'add' && (!merchantUpiId || selfExcluded) && (
               <p className="rounded-lg border border-amber-900 bg-amber-950/30 px-3 py-2 text-sm text-amber-300">
-                {selfExcluded ? `Deposits are disabled until ${formatLimitEnd(limits!.self_excluded_until!)}.` : 'Deposits are temporarily unavailable.'}
+                {selfExcluded ? `You can't add money until ${formatLimitEnd(limits!.self_excluded_until!)}.` : 'Adding money isn\'t available right now.'}
               </p>
             )}
 
             {/* Breakdown cards */}
             <section className="animate-slide-up" style={{ animationDelay: '100ms' }}>
-              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Earnings breakdown</h3>
+              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Where your money came from</h3>
               <div className="space-y-2.5">
-                <BreakdownRow icon={<Gift className="w-4 h-4 text-amber-400" />} label="Signup bonus" value={breakdown.signup_earned} sub="One-time balance credit" />
-                <BreakdownRow icon={<Plus className="w-4 h-4 text-cyan-400" />} label="Approved deposits" value={breakdown.deposits_total} sub="Deposits credited to play balance" />
-                <BreakdownRow icon={<TrendingDown className="w-4 h-4 text-rose-400" />} label="Spent on selections" value={-breakdown.selections_spent} sub="Total stake submitted" />
-                <BreakdownRow icon={<Sparkles className="w-4 h-4 text-emerald-400" />} label="Winning payouts" value={breakdown.winnings_total} sub="Total winnings paid" />
-                <BreakdownRow icon={<Send className="w-4 h-4 text-slate-400" />} label="Withdrawn" value={-breakdown.withdrawn_total} sub="Approved withdrawal payments" />
+                <BreakdownRow icon={<Gift className="w-4 h-4 text-amber-400" />} label="Welcome bonus" value={breakdown.signup_earned} sub="Given once when you joined" />
+                <BreakdownRow icon={<Plus className="w-4 h-4 text-cyan-400" />} label="Money added" value={breakdown.deposits_total} sub="Payments we've checked and added" />
+                <BreakdownRow icon={<TrendingDown className="w-4 h-4 text-rose-400" />} label="Spent on bets" value={-breakdown.selections_spent} sub="Total amount you've bet" />
+                <BreakdownRow icon={<Sparkles className="w-4 h-4 text-emerald-400" />} label="Winnings" value={breakdown.winnings_total} sub="Total you've won" />
+                <BreakdownRow icon={<Send className="w-4 h-4 text-slate-400" />} label="Withdrawn" value={-breakdown.withdrawn_total} sub="Money sent to your UPI" />
               </div>
             </section>
 
@@ -405,17 +405,17 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
 
             {/* History */}
             <section>
-              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Transaction history</h3>
+              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Your payments</h3>
               {withdrawals.length === 0 && addFunds.length === 0 ? (
                 <div className="py-6 text-center">
-                  <p className="text-sm text-slate-400">No deposits or withdrawals yet.</p>
+                  <p className="text-sm text-slate-400">You haven't added or withdrawn money yet.</p>
                   <button
                     type="button"
                     onClick={() => { setModal('add'); setMessage(null); setAmount(''); setUpiOrRef(''); }}
                     disabled={!merchantUpiId || selfExcluded}
                     className="mt-3 rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-emerald-300 disabled:opacity-40"
                   >
-                    Start adding funds
+                    Add money
                   </button>
                 </div>
               ) : (
@@ -428,7 +428,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                           {txn.type === 'withdraw' ? <Send className="w-3.5 h-3.5 text-slate-400" /> : <Plus className="w-3.5 h-3.5 text-emerald-400" />}
                           <div>
                             <p className="text-sm font-medium text-slate-200">
-                              {txn.type === 'withdraw' ? 'Withdrawal' : 'Add funds'} — {txn.amount} balance
+                              {txn.type === 'withdraw' ? 'Withdrawal' : 'Money added'} — ₹{txn.amount}
                             </p>
                             <p className="text-[11px] text-slate-400">{formatDate(txn.created_at)}</p>
                           </div>
@@ -437,7 +437,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                           txn.status === 'approved' ? 'bg-emerald-950 text-emerald-400' :
                           txn.status === 'rejected' ? 'bg-rose-950 text-rose-400' :
                           'bg-amber-950 text-amber-400'
-                        }`}>{txn.status}</span>
+                        }`}>{txn.status === 'approved' ? 'Done' : txn.status === 'rejected' ? 'Rejected' : 'Being checked'}</span>
                       </div>
                     ))}
                 </div>
@@ -445,7 +445,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
             </section>
           </>
         ) : (
-          <p className="text-center text-slate-400 py-12">Failed to load balance.</p>
+          <p className="text-center text-slate-400 py-12">We couldn't load your balance. Please check your internet and try again.</p>
         )}
       </main>
 
@@ -461,7 +461,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 id="balance-modal-title" className="text-lg font-bold text-white">{modal === 'withdraw' ? 'Withdraw winnings' : 'Add funds'}</h3>
+              <h3 id="balance-modal-title" className="text-lg font-bold text-white">{modal === 'withdraw' ? 'Withdraw money' : 'Add money'}</h3>
               <button type="button" aria-label="Close dialog" onClick={closeModal} className="tap-target text-slate-400 hover:text-slate-300">
                 <X className="w-5 h-5" />
               </button>
@@ -470,7 +470,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
             {modal === 'add' && (
               <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5">
                 <Lock className="w-4 h-4 text-slate-400 shrink-0" />
-                <p className="text-xs text-slate-400">Added funds go to your play balance. Admin must approve after payment verification. Maximum {breakdown?.max_add_funds_amount ?? 'unavailable'}.</p>
+                <p className="text-xs text-slate-400">Money you add can be used for betting once we've checked your payment. You can add up to ₹{breakdown ? formatNumber(breakdown.max_add_funds_amount) : '—'} at a time.</p>
               </div>
             )}
 
@@ -483,13 +483,13 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                   await load();
                   await userRequests.refresh();
                   onBalanceChanged();
-                  setMessage({ kind: 'ok', text: 'Withdrawal request sent.' });
+                  setMessage({ kind: 'ok', text: 'Withdrawal request sent. We\'ll send the money to your UPI ID after checking it.' });
                 }}
               />
             ) : (
               <>
                 <div>
-                  <label htmlFor="add-funds-amount" className="block text-xs text-slate-400 mb-1.5">Amount (balance)</label>
+                  <label htmlFor="add-funds-amount" className="block text-xs text-slate-400 mb-1.5">How much do you want to add? (₹)</label>
                   <input
                     id="add-funds-amount"
                     type="text" inputMode="numeric" value={amount}
@@ -512,11 +512,11 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                   </div>
                   <div className="flex items-center gap-2">
                     <Smartphone className="w-4 h-4 text-emerald-400" />
-                    <p className="text-sm font-medium text-emerald-300">Pay via UPI</p>
+                    <p className="text-sm font-medium text-emerald-300">Step 1: Pay with UPI</p>
                   </div>
                   <div className="flex items-center justify-between gap-2 bg-slate-900/60 rounded-lg px-3 py-2">
                     <div className="min-w-0">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Pay to UPI ID</p>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Send money to this UPI ID</p>
                       <p className="text-sm font-mono font-medium text-emerald-400 truncate">{merchantUpiId}</p>
                     </div>
                     <button
@@ -528,9 +528,9 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                   </div>
                   <div className="flex items-center gap-2 bg-amber-950/30 border border-amber-900/50 rounded-lg px-3 py-2">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <p className="text-[11px] text-amber-300">Amount to pay: <span className="font-bold">{amount} INR</span> to {merchantName}</p>
+                    <p className="text-[11px] text-amber-300">Pay exactly <span className="font-bold">₹{amount}</span> to {merchantName}</p>
                   </div>
-                  <p className="text-xs text-slate-400 text-center">Tap your UPI app below to pay {amount}</p>
+                  <p className="text-xs text-slate-400 text-center">Tap your UPI app to pay ₹{amount}, or scan the QR code</p>
                   <div className="grid grid-cols-2 gap-2">
                     <a
                       href={buildAppDeepLink(Number(amount), 'phonepe')}
@@ -558,25 +558,25 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                     </a>
                   </div>
                     <p className="text-[11px] text-slate-400 text-center">
-                      If an app doesn't open, copy the UPI ID above and pay manually from your UPI app.
+                      If the app doesn't open, copy the UPI ID above and pay from your UPI app yourself.
                     </p>
                     <ol className="list-decimal space-y-1 pl-5 text-xs text-slate-300">
-                      <li>Pay {amount} INR to the UPI ID above or scan the QR code.</li>
-                      <li>Find the UTR/reference in your payment app (often 12 digits; letters and numbers are accepted).</li>
-                      <li>Paste the 8–30 character reference below (example: 123456789012).</li>
-                      <li>Upload a screenshot of the completed payment and submit.</li>
+                      <li>Pay ₹{amount} to the UPI ID above, or scan the QR code.</li>
+                      <li>Take a screenshot of the "Payment successful" screen.</li>
+                      <li>In your payment app, open the payment and copy the UTR number (usually 12 digits).</li>
+                      <li>Upload the screenshot and paste the UTR number below, then tap Send for checking.</li>
                     </ol>
                     </div>
                 ) : (
                   <div className="flex items-center gap-2 bg-amber-950/30 border border-amber-900/50 rounded-lg px-3 py-2">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <p className="text-xs text-amber-300">Merchant UPI ID is not configured. Please contact support before making a payment.</p>
+                    <p className="text-xs text-amber-300">Payments can't be received right now. Please don't send any money, and contact support.</p>
                   </div>
                 )}
 
                 {/* Screenshot upload */}
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">Payment screenshot</label>
+                  <label className="block text-xs text-slate-400 mb-1.5">Step 2: Payment screenshot <span className="text-rose-300">(required)</span></label>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -595,7 +595,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                         <X className="w-4 h-4" />
                       </button>
                       <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/90 text-white text-xs font-medium">
-                        <Check className="w-3 h-3" /> Screenshot selected
+                        <Check className="w-3 h-3" /> Screenshot added
                       </div>
                     </div>
                   ) : (
@@ -605,7 +605,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                       className="w-full py-6 rounded-xl border-2 border-dashed border-slate-700 hover:border-emerald-700 transition-colors flex flex-col items-center gap-2 text-slate-400 hover:text-slate-400"
                     >
                       <Upload className="w-5 h-5" />
-                      <span className="text-xs">Tap to upload payment screenshot</span>
+                      <span className="text-xs">Tap to add a screenshot of your payment</span>
                     </button>
                   )}
                 </div>
@@ -613,18 +613,18 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
             )}
 
                 <div>
-                  <label htmlFor="add-funds-reference" className="block text-xs text-slate-400 mb-1.5">Payment reference / UTR number</label>
+                  <label htmlFor="add-funds-reference" className="block text-xs text-slate-400 mb-1.5">Step 3: UTR number <span className="text-rose-300">(required)</span></label>
                   <input
                     id="add-funds-reference"
                     type="text" value={upiOrRef} disabled={!merchantUpiId}
                     onChange={(e) => { setUpiOrRef(e.target.value); setMessage(null); }}
-                    placeholder="Transaction ID / UTR from payment app"
+                    placeholder="e.g. 412345678901"
                     className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none disabled:opacity-40"
                   />
                 </div>
 
                 <p className="text-[11px] text-slate-400">
-                  After paying via UPI, enter the reference/UTR number and upload the screenshot. Admin will verify and credit your account.
+                  Find the UTR number in your payment app's transaction details. We'll check your payment and add the money to your balance.
                 </p>
 
                 {message && (
@@ -637,6 +637,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                   onClick={handleSubmit}
                   disabled={
                     !merchantUpiId || selfExcluded || submitting || uploadingScreenshot ||
+                    !screenshotFile || !/^[0-9A-Za-z]{8,30}$/.test(upiOrRef.trim()) ||
                     !/^[0-9]+$/.test(amount) ||
                     Number(amount) < 1 ||
                     !breakdown ||
@@ -644,7 +645,7 @@ export default function BalancePage({ onBack, onBalanceChanged, onMyBets, onOpen
                   }
                   className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-bold hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-40 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/15"
                 >
-                  {submitting || uploadingScreenshot ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit for approval'}
+                  {submitting || uploadingScreenshot ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send for checking'}
                 </button>
               </>
             )}

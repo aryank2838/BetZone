@@ -810,7 +810,9 @@ BEGIN
   END IF;
 
   PERFORM set_config('request.jwt.claim.sub', v_user1::text, true);
-  PERFORM public.request_add_funds(100, '123456789012', NULL);
+  INSERT INTO storage.objects (bucket_id, name, owner)
+  VALUES ('payment-screenshots', v_user1::text || '/proof-813.png', v_user1);
+  PERFORM public.request_add_funds(100, '123456789012', v_user1::text || '/proof-813.png');
   SELECT id INTO v_add_funds_id
   FROM public.add_funds_requests
   WHERE user_id = v_user1 AND status = 'pending';
@@ -895,7 +897,9 @@ BEGIN
   END IF;
 
   UPDATE public.profiles SET points = 1000, wallet = 0 WHERE id = v_user3;
-  PERFORM public.request_add_funds(100, '123456789012', NULL);
+  INSERT INTO storage.objects (bucket_id, name, owner)
+  VALUES ('payment-screenshots', v_user3::text || '/proof-898.png', v_user3);
+  PERFORM public.request_add_funds(100, '123456789012', v_user3::text || '/proof-898.png');
   v_error := NULL;
   BEGIN
     PERFORM public.request_add_funds(1, '123456789013', NULL);
@@ -1392,7 +1396,8 @@ BEGIN
      OR (v_bets->0->>'pending_stake')::integer <> 100 THEN
     RAISE EXCEPTION 'authenticated get_my_bets returned unexpected rows: %', v_bets;
   END IF;
-  v_result := public.request_add_funds(200, 'E1AUTHDEPOSIT1', NULL);
+  -- own.png was uploaded by this user in the storage-policy block above.
+  v_result := public.request_add_funds(200, 'E1AUTHDEPOSIT1', '00000000-0000-4000-8000-000000000005/own.png');
   IF v_result->>'status' <> 'pending' THEN
     RAISE EXCEPTION 'authenticated deposit request failed: %', v_result;
   END IF;
@@ -1639,7 +1644,30 @@ BEGIN
 
   INSERT INTO public.add_funds_requests (user_id, amount, status, payment_ref)
   VALUES ('00000000-0000-4000-8000-000000000002', 50, 'rejected', 'R8REJECTEDREF1');
-  v_result := public.request_add_funds(100, 'R8REJECTEDREF1', NULL);
+  -- Screenshot rules (migration 20261111140000): none, or a path with no uploaded file, is rejected.
+  v_error := NULL;
+  BEGIN
+    PERFORM public.request_add_funds(100, 'R9NOSHOT00001', NULL);
+  EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT;
+  END;
+  IF v_error IS DISTINCT FROM 'Please upload a screenshot of your payment.' THEN
+    RAISE EXCEPTION 'add funds without a screenshot gave %', COALESCE(v_error, 'no error');
+  END IF;
+  v_error := NULL;
+  BEGIN
+    PERFORM public.request_add_funds(100, 'R9NOSHOT00002', '00000000-0000-4000-8000-000000000006/never-uploaded.png');
+  EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT;
+  END;
+  IF v_error IS DISTINCT FROM 'We could not find your payment screenshot. Please upload it again.' THEN
+    RAISE EXCEPTION 'add funds with a screenshot path that was never uploaded gave %', COALESCE(v_error, 'no error');
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.add_funds_requests WHERE payment_ref LIKE 'R9NOSHOT%') THEN
+    RAISE EXCEPTION 'a rejected add-funds call still created a request';
+  END IF;
+
+  INSERT INTO storage.objects (bucket_id, name, owner)
+  VALUES ('payment-screenshots', '00000000-0000-4000-8000-000000000006/proof-r8.png', '00000000-0000-4000-8000-000000000006');
+  v_result := public.request_add_funds(100, 'R8REJECTEDREF1', '00000000-0000-4000-8000-000000000006/proof-r8.png');
   IF v_result->>'status' <> 'pending' THEN
     RAISE EXCEPTION 'R8: a reference used only by a rejected request could not be reused: %', v_result;
   END IF;
