@@ -597,6 +597,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
     try {
       switch (confirmation.kind) {
         case 'approve_add_funds': await handleAddFunds(confirmation.request.id, 'approved'); break;
+        case 'approve_withdrawal': await handleWithdrawal(confirmation.request.id, 'approved'); break;
         case 'toggle_ban': await handleToggleBan(confirmation.user); break;
         case 'set_admin': await handleSetAdmin(confirmation.user, confirmation.isAdmin); break;
         case 'adjust': await applyAdjustment(confirmation.user, confirmation.target, confirmation.delta, confirmation.reason); break;
@@ -853,7 +854,14 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
             onAddFundsFilterChange={setAddFundsFilter}
             onWithdrawalFilterChange={setWithdrawalFilter}
             onSearch={(kind) => { if (kind === 'withdrawals') { setHasMoreWithdrawals(false); } else setHasMoreAddFunds(false); void loadWithdrawals(); }}
-            onProcessWithdrawal={(id, status, reason) => { void handleWithdrawal(id, status, reason); }}
+            onProcessWithdrawal={(id, status, reason) => {
+              const request = withdrawals.find((item) => item.id === id);
+              if (status === 'approved' && request) {
+                setPendingConfirm({ kind: 'approve_withdrawal', request });
+                return;
+              }
+              void handleWithdrawal(id, status, reason);
+            }}
             onProcessAddFunds={(id, status, reason) => {
               const request = addFundsReqs.find((item) => item.id === id);
               if (status === 'approved' && request) {

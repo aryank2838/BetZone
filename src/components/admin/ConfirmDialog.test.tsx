@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useCallback, useRef, useState } from 'react';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
-import { CHANGE_UPI_CONFIRM_TEXT, MAKE_ADMIN_CONFIRM_TEXT, confirmationContent, type AdminConfirmation } from '@/components/admin/confirmations';
+import {
+  APPROVE_WITHDRAWAL_WARNING, CHANGE_UPI_CONFIRM_TEXT, MAKE_ADMIN_CONFIRM_TEXT, confirmationContent, type AdminConfirmation,
+} from '@/components/admin/confirmations';
 import { useDialogA11y } from '@/lib/useDialogA11y';
 import type { AdminUser } from '@/components/admin/UsersTab';
-import type { AddFundsRequest } from '@/components/admin/RequestsTab';
+import type { AddFundsRequest, WithdrawalRequest } from '@/components/admin/RequestsTab';
 
 const user: AdminUser = {
   id: 'u1', display_name: 'Asha', email: 'asha@example.invalid', points: 20, wallet: 500,
@@ -14,6 +16,10 @@ const user: AdminUser = {
 const request: AddFundsRequest = {
   id: 'r1', user_id: 'u1', amount: 750, status: 'pending', payment_ref: 'UTR123456789',
   screenshot_path: 'u1/proof.png', created_at: '2026-11-11T05:00:00Z', processed_at: null, reject_reason: null, user_name: 'Asha',
+};
+const withdrawal: WithdrawalRequest = {
+  id: 'w1', user_id: 'u1', amount: 1200, status: 'pending', upi_id: 'asha@okaxis',
+  created_at: '2026-11-11T06:00:00Z', processed_at: null, reject_reason: null, user_name: 'Asha',
 };
 
 afterEach(() => {
@@ -30,6 +36,14 @@ describe('admin confirmation content', () => {
     expect(notOpened.warning).toMatch(/not opened the payment screenshot/);
     const opened = confirmationContent({ kind: 'approve_add_funds', request, screenshotOpened: true });
     expect(opened.rows).toContainEqual(['Screenshot', 'Opened']);
+  });
+
+  it('shows user, amount and UPI ID with a paid-first warning before approving a withdrawal', () => {
+    const content = confirmationContent({ kind: 'approve_withdrawal', request: withdrawal });
+    expect(content.rows).toEqual([['User', 'Asha'], ['Amount', '1200'], ['UPI ID', 'asha@okaxis']]);
+    expect(content.warning).toBe('Only approve after you have sent this payment. Approving marks it as paid.');
+    expect(content.warning).toBe(APPROVE_WITHDRAWAL_WARNING);
+    expect(content.requiredText).toBeUndefined();
   });
 
   it('requires typing ADMIN only when granting admin rights', () => {
@@ -84,6 +98,19 @@ describe('ConfirmDialog', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'CHANGE UPI' } });
     expect(confirm).toBeEnabled();
     fireEvent.click(confirm);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('approves a withdrawal only after the admin confirms in the dialog', () => {
+    const onConfirm = vi.fn();
+    render(<Harness confirmation={{ kind: 'approve_withdrawal', request: withdrawal }} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open confirm' }));
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent('asha@okaxis');
+    expect(dialog).toHaveTextContent('1200');
+    expect(dialog).toHaveTextContent(APPROVE_WITHDRAWAL_WARNING);
+    expect(onConfirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'I have paid · Approve' }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 

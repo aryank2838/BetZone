@@ -1,9 +1,10 @@
-import type { AddFundsRequest } from './RequestsTab';
+import type { AddFundsRequest, WithdrawalRequest } from './RequestsTab';
 import type { AdminUser } from './UsersTab';
 
 /** High-risk admin actions that need an explicit confirmation step (C1). */
 export type AdminConfirmation =
   | { kind: 'approve_add_funds'; request: AddFundsRequest; screenshotOpened: boolean }
+  | { kind: 'approve_withdrawal'; request: WithdrawalRequest }
   | { kind: 'toggle_ban'; user: AdminUser }
   | { kind: 'set_admin'; user: AdminUser; isAdmin: boolean }
   | { kind: 'adjust'; user: AdminUser; target: 'points' | 'wallet'; delta: number; reason: string }
@@ -18,6 +19,9 @@ export interface ConfirmationContent {
   requiredText?: string;
   danger: boolean;
 }
+
+/** Shown before a withdrawal is marked as paid. */
+export const APPROVE_WITHDRAWAL_WARNING = 'Only approve after you have sent this payment. Approving marks it as paid.';
 
 /** Text typed to grant admin rights. */
 export const MAKE_ADMIN_CONFIRM_TEXT = 'ADMIN';
@@ -44,6 +48,20 @@ export function confirmationContent(confirmation: AdminConfirmation): Confirmati
           : 'Crediting cannot be undone from this screen. Confirm the UTR matches a received payment.',
         confirmLabel: 'Approve & credit',
         danger: false,
+      };
+    }
+    case 'approve_withdrawal': {
+      const { request } = confirmation;
+      return {
+        title: 'Mark this withdrawal as paid?',
+        rows: [
+          ['User', request.user_name || request.user_id],
+          ['Amount', String(request.amount)],
+          ['UPI ID', request.upi_id],
+        ],
+        warning: APPROVE_WITHDRAWAL_WARNING,
+        confirmLabel: 'I have paid · Approve',
+        danger: true,
       };
     }
     case 'toggle_ban': {
