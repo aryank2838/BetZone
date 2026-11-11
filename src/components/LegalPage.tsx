@@ -5,7 +5,11 @@ export type LegalDocument = 'terms' | 'privacy' | 'contact';
 interface LegalSection {
   heading?: string;
   text: string;
+  bullets?: string[];
+  link?: { href: string; label: string };
 }
+
+const SUPPORT_EMAIL ='a082169220@gmail.com';
 
 const CONTENT: Record<LegalDocument, { title: string; sections: LegalSection[] }> = {
   terms: {
@@ -36,14 +40,56 @@ const CONTENT: Record<LegalDocument, { title: string; sections: LegalSection[] }
   privacy: {
     title: 'Privacy Policy',
     sections: [
-      { text: '[OWNER/LAWYER TO REPLACE] This Privacy Policy must be reviewed and completed by the service owner and qualified legal counsel before launch.' },
-      { text: '[OWNER/LAWYER TO REPLACE] Describe data collected, purposes, retention, user rights, processors, and contact details accurately.' },
+      { text: 'Effective Date: 11 November 2026' },
+      { text: 'This Privacy Policy describes how your information is collected, used, and protected when you use our platform. We are committed to maintaining the confidentiality and security of your personal data.' },
+      {
+        heading: '1. Information We Collect',
+        text: 'We collect information to provide a secure and customized experience:',
+        bullets: [
+          'Account Information: Name, email address, age verification data, and profile settings.',
+          'Financial Data: Deposit and withdrawal transaction history, payment reference tokens, and ledger entries. (We do not store your complete banking credentials or raw payment methods on our servers).',
+          'Technical Information: IP address, device type, browser settings, and regional location data to ensure legal compliance.',
+        ],
+      },
+      {
+        heading: '2. How We Use Your Information',
+        text: 'Your data is used strictly for the following operational requirements:',
+        bullets: [
+          'Account Management: Creating your profile, handling secure log-ins, and maintaining your platform wallet.',
+          'Responsible Play Enforcement: Enforcing daily deposit caps, loss limits, or self-exclusion requests that you choose to configure.',
+          'Legal and Security Compliance: Preventing fraudulent activities, multi-account abuse, and verifying that you are accessing our services from a permitted jurisdiction.',
+        ],
+      },
+      {
+        heading: '3. Data Storage and Retention',
+        text: 'Our platform utilizes secure cloud database solutions (including Supabase Auth and Postgres) to protect your infrastructure.',
+        bullets: [
+          'Transaction Records: Financial ledger entries, deposit logs, and selection histories are retained permanently for statutory audit requirements and dispute resolutions.',
+          'Account Deletion: Accounts cannot be deleted instantly if a transaction history exists. Instead, accounts are permanently banned or locked to preserve mandatory compliance tracking.',
+        ],
+      },
+      {
+        heading: '4. Cookies and Session Data',
+        text: 'We use local storage keys and basic security cookies to ensure you stay securely logged into your account across browser tabs. These tokens do not track your activity on external websites and expire automatically after 30 minutes of complete inactivity.',
+      },
+      {
+        heading: '5. Sharing of Data',
+        text: 'We do not sell, rent, or trade your personal information to third parties. Data is shared only under the following limited conditions:',
+        bullets: [
+          'Service Providers: Payment gateways or infrastructure providers necessary to process your financial transactions.',
+          'Legal Obligation: If requested by law enforcement, regulatory bodies, or a court order within a legally binding jurisdiction.',
+        ],
+      },
     ],
   },
   contact: {
     title: 'Contact',
     sections: [
-      { text: "[OWNER/LAWYER TO REPLACE] Add the service owner's verified support email, mailing address, and other required contact information." },
+      {
+        heading: 'Support',
+        text: 'For help with your account, deposits, withdrawals, or these policies, email us at:',
+        link: { href: `mailto:${SUPPORT_EMAIL}`, label: SUPPORT_EMAIL },
+      },
     ],
   },
 };
@@ -65,6 +111,14 @@ export default function LegalPage({ document, onBack }: { document: LegalDocumen
             <section key={section.heading ?? section.text}>
               {section.heading && <h2 className="mb-1 text-base font-semibold text-white">{section.heading}</h2>}
               <p>{section.text}</p>
+              {section.bullets && (
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {section.bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}
+                </ul>
+              )}
+              {section.link && (
+                <a href={section.link.href} className="mt-1 inline-block break-all text-cyan-300 underline hover:text-cyan-200">{section.link.label}</a>
+              )}
             </section>
           ))}
         </div>

@@ -124,3 +124,4 @@ Each item below is one git commit.
   - **Sentry:** `beforeSend` also scrubs `event.exception.values[].value` (message text only); `stacktrace` objects are passed through untouched.
   - **Privilege audit:** removed `award_ad_reward` and `get_ad_reward_status` (dropped functions) from the allowlist in `function_privilege_audit.sql`.
 - **Legal:** Terms page replaced with the owner-supplied "Legal Disclaimer & Terms Summary" (5 sections). The Privacy Policy and Contact pages still contain placeholders, so production builds stay blocked until they are replaced. `TERMS_VERSION` stays `2026-11-10` (the site had not launched).
+- **Legal:** Privacy Policy replaced with the owner-supplied text (effective 11 November 2026), and the Contact page now shows the support email (`SUPPORT_EMAIL` in `LegalPage.tsx`). No placeholders remain, so production builds pass without `ALLOW_PLACEHOLDER_LEGAL`.
