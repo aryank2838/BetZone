@@ -2,7 +2,7 @@
 
 ## Automated script (E2)
 
-`supabase/tests/concurrency.sh` starts parallel `psql` sessions against a **disposable** database and exits non-zero on any failure. It resets its own fixture first (five fixed-UUID users and two games, `cc_open` and `cc_settle`), restores `max_number_liability` afterwards, and refuses to run against a non-local URL unless `CONCURRENCY_ALLOW_NONLOCAL=1` is set.
+`supabase/tests/concurrency.sh` starts parallel `psql` sessions against a **disposable** database and exits non-zero on any failure. It resets its own fixture first (seven fixed-UUID users and four games: `cc_open`, `cc_settle`, `cc_dl_a` and `cc_dl_b`), restores `max_number_liability` afterwards, and refuses to run against a non-local URL unless `CONCURRENCY_ALLOW_NONLOCAL=1` is set.
 
 ```sh
 supabase start
@@ -18,6 +18,7 @@ What it checks:
 1. **Concurrent submits cannot overspend.** One user with 100 points sends five 100-point bets of five different bet types at once (an advisory-lock barrier releases them together). Exactly one is accepted; balance, ledger and selections all show 100 spent.
 2. **Submit racing settlement (A2).** The admin session takes the exclusive round lock, waits until the user's submit is blocked behind it, then posts the open result, which pays that same user's winning bet. Passes when no session reports `deadlock detected`, the winner is paid exactly once (90 = 10 × 9), the racing bet is either accepted once or rejected cleanly, and the user's balance matches the ledger.
 3. **Per-number liability (A3).** With `max_number_liability = 900`, two users bet 60 points (payout 540 each) on the same `single_open` number in parallel, five times. Exactly one bet per number is accepted, the other fails with `Number liability limit exceeded`, and total liability never exceeds 900.
+4. **Two settlements with shared winners (R2).** Users E and F both win `cc_dl_a` and `cc_dl_b`; their bet rows are inserted in opposite user order per game. A holder session locks E's profile, settlement A starts and blocks, settlement B starts, then the holder releases. Both settlements must succeed with no `deadlock detected`, and each user is paid exactly twice (2 × 90).
 
 Expected output:
 
@@ -25,10 +26,13 @@ Expected output:
 ok:   1. concurrent submits: exactly one of five 100-point bets accepted on a 100-point balance
 ok:   2. submit vs settlement: no deadlock, winner paid exactly once (90), racing bet accepted once, balance matches ledger
 ok:   3. per-number liability: 5 parallel pairs, one bet accepted per number, payout never above 900
+ok:   4. two concurrent settlements with shared winners: both succeed, no deadlock, each winner paid exactly twice
 All concurrency checks passed.
 ```
 
 Against a schema built only up to the migrations before `20261110160000` (the old lock order and no bet-type lock), the script fails checks 2 and 3: the racing submit is aborted with `deadlock detected`, and both bets on each number are accepted (liability 1080 > 900).
+
+Against a schema without `20261111120000_round3_fixes.sql`, check 4 fails: one settlement is aborted with `deadlock detected` and each user is paid once instead of twice. The fix takes a global settlement advisory lock (`settlement_lock_key()`) before the round lock and settles winners in `user_id` order.
 
 ## Manual two-session checks
 

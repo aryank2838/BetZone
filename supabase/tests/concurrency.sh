@@ -17,6 +17,8 @@
 #   1. Concurrent submits from one user cannot overspend the balance.
 #   2. A submit racing a settlement: no deadlock, no lost or double-paid bet.
 #   3. Parallel bets on one number cannot together exceed max_number_liability.
+#   4. Two settlements of different games with the same winners: no deadlock,
+#      each winner paid exactly once per game (R2).
 set -euo pipefail
 
 DB_URL="${DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
@@ -40,9 +42,14 @@ USER_A=c0000000-0000-4000-8000-00000000c00a
 USER_B=c0000000-0000-4000-8000-00000000c00b
 USER_C=c0000000-0000-4000-8000-00000000c00c
 USER_D=c0000000-0000-4000-8000-00000000c00d
-FIXTURE_USERS="'$ADMIN','$USER_A','$USER_B','$USER_C','$USER_D'"
+USER_E=c0000000-0000-4000-8000-00000000c00e
+USER_F=c0000000-0000-4000-8000-00000000c00f
+FIXTURE_USERS="'$ADMIN','$USER_A','$USER_B','$USER_C','$USER_D','$USER_E','$USER_F'"
 OPEN_GAME=cc_open
 SETTLE_GAME=cc_settle
+DL_GAME_A=cc_dl_a
+DL_GAME_B=cc_dl_b
+FIXTURE_GAMES="'$OPEN_GAME','$SETTLE_GAME','$DL_GAME_A','$DL_GAME_B'"
 RUN_ID="$$$RANDOM"
 
 q() { psql "$DB_URL" -X -q -t -A -v ON_ERROR_STOP=1 -c "$1"; }
@@ -97,10 +104,15 @@ BARRIER_SQL="SELECT pg_advisory_lock_shared($BARRIER_KEY) IS NULL; SELECT pg_adv
 reset_fixture() {
   q "
     DELETE FROM public.admin_action_log WHERE actor_id IN ($FIXTURE_USERS) OR target_user_id IN ($FIXTURE_USERS);
-    DELETE FROM public.selections WHERE game IN ('$OPEN_GAME', '$SETTLE_GAME');
-    DELETE FROM public.winning_results WHERE game IN ('$OPEN_GAME', '$SETTLE_GAME');
+    DELETE FROM public.selections WHERE game IN ($FIXTURE_GAMES) OR user_id IN ($FIXTURE_USERS);
+    DELETE FROM public.winning_results WHERE game IN ($FIXTURE_GAMES);
+    -- Money history blocks deleting an Auth user (ON DELETE RESTRICT, R4), so
+    -- the fixture's own rows go first.
+    DELETE FROM public.point_ledger WHERE user_id IN ($FIXTURE_USERS);
+    DELETE FROM public.withdrawals WHERE user_id IN ($FIXTURE_USERS);
+    DELETE FROM public.add_funds_requests WHERE user_id IN ($FIXTURE_USERS);
     DELETE FROM auth.users WHERE id IN ($FIXTURE_USERS);
-    DELETE FROM public.game_schedule WHERE game IN ('$OPEN_GAME', '$SETTLE_GAME');
+    DELETE FROM public.game_schedule WHERE game IN ($FIXTURE_GAMES);
   " >/dev/null
 }
 
@@ -133,14 +145,17 @@ q "
   INSERT INTO auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
   SELECT u.id::uuid, 'authenticated', 'authenticated', 'cc-' || u.tag || '-$RUN_ID@example.invalid', '', now(), '{}',
          jsonb_build_object('display_name', 'Concurrency ' || u.tag, 'accepted_terms', true, 'terms_version', 'concurrency')
-  FROM (VALUES ('$ADMIN', 'admin'), ('$USER_A', 'a'), ('$USER_B', 'b'), ('$USER_C', 'c'), ('$USER_D', 'd')) AS u(id, tag);
+  FROM (VALUES ('$ADMIN', 'admin'), ('$USER_A', 'a'), ('$USER_B', 'b'), ('$USER_C', 'c'), ('$USER_D', 'd'),
+               ('$USER_E', 'e'), ('$USER_F', 'f')) AS u(id, tag);
   UPDATE public.profiles SET is_admin = (id = '$ADMIN'), is_banned = false, points = 0, wallet = 0,
          terms_accepted_at = COALESCE(terms_accepted_at, now())
   WHERE id IN ($FIXTURE_USERS);
   -- cc_open: open and close bets accepted all day. cc_settle: open bets already closed today.
   INSERT INTO public.game_schedule (game, label, bets_open, open_bets_close, close_bets_close, open_result_at, close_result_at, close_result_next_day)
   VALUES ('$OPEN_GAME', 'Concurrency open', '00:00', '23:59:59', '23:59:59', '23:59:59', '23:59:59', false),
-         ('$SETTLE_GAME', 'Concurrency settle', '00:00', '00:00:01', '23:59:59', '00:00:01', '23:59:59', false);
+         ('$SETTLE_GAME', 'Concurrency settle', '00:00', '00:00:01', '23:59:59', '00:00:01', '23:59:59', false),
+         ('$DL_GAME_A', 'Concurrency settle A', '00:00', '00:00:01', '23:59:59', '00:00:01', '23:59:59', false),
+         ('$DL_GAME_B', 'Concurrency settle B', '00:00', '00:00:01', '23:59:59', '00:00:01', '23:59:59', false);
 " >/dev/null
 
 # ---------------------------------------------------------------------------
@@ -254,6 +269,60 @@ for number in 5 6 7 8 9; do
 done
 DEADLOCK_FREE=1; no_deadlocks "liability" "liability_*" || DEADLOCK_FREE=0
 [ "$FAILURES" = "$FAILURES_BEFORE_3" ] && pass "3. per-number liability: 5 parallel pairs, one bet accepted per number, payout never above 900"
+
+# ---------------------------------------------------------------------------
+# 4. Two settlements of different games whose rounds have the same winners
+#    (R2). Game A's rows are inserted E then F, game B's F then E, so heap
+#    order differs between the games. A holder session locks E's profile;
+#    settlement A starts (blocks on E), then settlement B starts, then the
+#    holder releases. Without the global settlement lock and ORDER BY user_id,
+#    A holds E and waits for F while B holds F and waits for E: a deadlock.
+# ---------------------------------------------------------------------------
+for pair in "$USER_E $DL_GAME_A" "$USER_F $DL_GAME_A" "$USER_F $DL_GAME_B" "$USER_E $DL_GAME_B"; do
+  set -- $pair
+  q "INSERT INTO public.selections (user_id, game, bet_type, round_date, selections, total_points, updated_at)
+     VALUES ('$1', '$2', 'single_open', '$TODAY', '[{\"number\":\"5\",\"points\":10}]', 10, now());" >/dev/null
+done
+q "UPDATE public.profiles SET points = 0, wallet = 0 WHERE id IN ('$USER_E', '$USER_F');" >/dev/null
+settle_sql() {  # $1 = game
+  echo "SET application_name = 'cc_dl_settle_$1'; BEGIN; SELECT set_config('request.jwt.claim.sub', '$ADMIN', true) IS NULL; SET LOCAL ROLE authenticated; SELECT 'RESULT:' || public.admin_post_open_result('$1', '$TODAY'::date, '122', '5')::text; COMMIT;"
+}
+DL_WAITERS="SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'cc_dl_settle_%' AND wait_event_type = 'Lock'"
+PGAPPNAME=cc_dl_holder psql "$DB_URL" -X -q -t -A -v ON_ERROR_STOP=1 -c "
+  SET application_name = 'cc_dl_holder';
+  BEGIN;
+  SELECT 1 FROM public.profiles WHERE id = '$USER_E' FOR UPDATE;
+  DO \$\$
+  DECLARE i integer := 0;
+  BEGIN
+    WHILE ($DL_WAITERS) < 2 LOOP
+      PERFORM pg_stat_clear_snapshot();
+      i := i + 1;
+      IF i > 600 THEN RAISE EXCEPTION 'settlements never queued behind the profile lock'; END IF;
+      PERFORM pg_sleep(0.025);
+    END LOOP;
+    PERFORM pg_sleep(0.2);
+  END \$\$;
+  COMMIT;" >"$WORK/dl_holder.out" 2>"$WORK/dl_holder.err" &
+HOLDER_PID=$!
+wait_for "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'cc_dl_holder' AND wait_event = 'PgSleep')" "holder to lock user E's profile"
+PGAPPNAME=cc_dl_settle_a psql "$DB_URL" -X -q -t -A -c "$(settle_sql "$DL_GAME_A")" >"$WORK/dl_settle_a.out" 2>"$WORK/dl_settle_a.err" &
+SETTLE_A_PID=$!
+wait_for "SELECT ($DL_WAITERS) >= 1" "settlement A to block"
+PGAPPNAME=cc_dl_settle_b psql "$DB_URL" -X -q -t -A -c "$(settle_sql "$DL_GAME_B")" >"$WORK/dl_settle_b.out" 2>"$WORK/dl_settle_b.err" &
+SETTLE_B_PID=$!
+wait "$HOLDER_PID" || true
+wait "$SETTLE_A_PID" || true
+wait "$SETTLE_B_PID" || true
+DEADLOCK_FREE=1; no_deadlocks "two settlements" "dl_*" || DEADLOCK_FREE=0
+settled_dl=$(cat "$WORK/dl_settle_a.out" "$WORK/dl_settle_b.out" | grep -c '^RESULT:' || true)
+paid_e=$(q "SELECT count(*) || ':' || COALESCE(SUM(delta), 0) FROM public.point_ledger WHERE user_id = '$USER_E' AND reason = 'winning_payout' AND metadata->>'game' IN ('$DL_GAME_A', '$DL_GAME_B')")
+paid_f=$(q "SELECT count(*) || ':' || COALESCE(SUM(delta), 0) FROM public.point_ledger WHERE user_id = '$USER_F' AND reason = 'winning_payout' AND metadata->>'game' IN ('$DL_GAME_A', '$DL_GAME_B')")
+if [ "$DEADLOCK_FREE" = 1 ] && [ "$settled_dl" = "2" ] && [ "$paid_e" = "2:180" ] && [ "$paid_f" = "2:180" ]; then
+  pass "4. two concurrent settlements with shared winners: both succeed, no deadlock, each winner paid exactly twice"
+else
+  fail "4. two settlements: settled=$settled_dl paid_e=$paid_e paid_f=$paid_f; holder: $(tr '\n' ' ' <"$WORK/dl_holder.err") A: $(tr '\n' ' ' <"$WORK/dl_settle_a.err") B: $(tr '\n' ' ' <"$WORK/dl_settle_b.err")"
+fi
 
 if [ "$FAILURES" -ne 0 ]; then
   echo "$FAILURES concurrency check(s) failed." >&2
