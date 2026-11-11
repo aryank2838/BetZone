@@ -23,7 +23,7 @@ function Warning() {
   return <p data-testid="warning">{inactivityWarning === null ? 'none' : String(inactivityWarning)}</p>;
 }
 
-async function signIn() {
+async function signIn(event: AuthChangeEvent = 'SIGNED_IN') {
   let listener: ((event: AuthChangeEvent, value: Session | null) => void) | undefined;
   authMock.onAuthStateChange.mockImplementation((callback: typeof listener) => {
     listener = callback;
@@ -31,7 +31,7 @@ async function signIn() {
   });
   render(<AuthProvider><Warning /></AuthProvider>);
   await act(async () => {
-    listener?.('SIGNED_IN', session);
+    listener?.(event, session);
     await vi.advanceTimersByTimeAsync(0);
   });
 }
@@ -106,5 +106,58 @@ describe('inactivity logout', () => {
 
     await advance(INACTIVITY_TIMEOUT_MS);
     expect(authMock.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('a fresh sign-in ignores a stale timestamp left by an earlier session', async () => {
+    localStorage.setItem(ACTIVITY_STORAGE_KEY, String(Date.now() - 2 * 60 * 60_000));
+    await signIn('SIGNED_IN');
+    await advance(1000);
+    expect(authMock.signOut).not.toHaveBeenCalled();
+    expect(screen.getByTestId('warning')).toHaveTextContent('none');
+    await advance(INACTIVITY_TIMEOUT_MS - INACTIVITY_WARNING_MS - 2000);
+    expect(authMock.signOut).not.toHaveBeenCalled();
+    await advance(INACTIVITY_WARNING_MS + 1000);
+    expect(authMock.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('a restored session that was idle for 30+ minutes is still signed out', async () => {
+    localStorage.setItem(ACTIVITY_STORAGE_KEY, String(Date.now() - 2 * 60 * 60_000));
+    await signIn('INITIAL_SESSION');
+    await advance(0);
+    expect(authMock.signOut).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(ACTIVITY_STORAGE_KEY)).toBeNull();
+  });
+
+  it('clears the stored timestamp when the user signs out', async () => {
+    let listener: ((event: AuthChangeEvent, value: Session | null) => void) | undefined;
+    authMock.onAuthStateChange.mockImplementation((callback: typeof listener) => {
+      listener = callback;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+    render(<AuthProvider><Warning /></AuthProvider>);
+    await act(async () => { listener?.('SIGNED_IN', session); await vi.advanceTimersByTimeAsync(0); });
+    expect(localStorage.getItem(ACTIVITY_STORAGE_KEY)).not.toBeNull();
+    await act(async () => { listener?.('SIGNED_OUT', null); await vi.advanceTimersByTimeAsync(0); });
+    expect(localStorage.getItem(ACTIVITY_STORAGE_KEY)).toBeNull();
+  });
+
+  it('keeps working when localStorage throws on every call', async () => {
+    const blocked = () => { throw new DOMException('blocked', 'SecurityError'); };
+    const spies = [
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked),
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked),
+      vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(blocked),
+    ];
+    try {
+      await signIn();
+      act(() => { window.dispatchEvent(new Event('keydown')); });
+      await advance(INACTIVITY_TIMEOUT_MS - INACTIVITY_WARNING_MS - 1000);
+      expect(authMock.signOut).not.toHaveBeenCalled();
+      expect(screen.getByTestId('warning')).toHaveTextContent('none');
+      await advance(INACTIVITY_WARNING_MS + 1000);
+      expect(authMock.signOut).toHaveBeenCalledTimes(1);
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+    }
   });
 });

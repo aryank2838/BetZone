@@ -8,8 +8,11 @@ import {
   ACTIVITY_THROTTLE_MS,
   INACTIVITY_TIMEOUT_MS,
   INACTIVITY_WARNING_MS,
+  clearStoredActivity,
   inactivityRemaining,
   parseActivityTimestamp,
+  readStoredActivity,
+  writeStoredActivity,
 } from '@/lib/inactivity';
 
 interface AuthState {
@@ -44,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const requestId = useRef(0);
   const userId = useRef<string | null>(null);
+  // In-memory copy of the last-activity time, used when localStorage is blocked.
+  const activityMemory = useRef<number | null>(null);
 
   const loadProfile = useCallback(async (userId: string): Promise<Profile> => {
     const { data, error } = await supabase
@@ -110,12 +115,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_OUT' || !session) {
         requestId.current += 1;
         userId.current = null;
+        activityMemory.current = null;
+        clearStoredActivity();
         setState({ session: null, user: null, profile: null, loading: false, profileError: null, profileErrorDetails: null, passwordRecovery: false, inactivityWarning: null });
         return;
       }
 
       const userChanged = userId.current !== session.user.id;
       userId.current = session.user.id;
+      // A real sign-in starts a fresh inactivity window. A restored session
+      // (INITIAL_SESSION) keeps the stored time, so a tab idle for 30+ minutes
+      // is still signed out. This runs before the inactivity effect schedules.
+      if (event === 'SIGNED_IN' && userChanged) {
+        const now = Date.now();
+        activityMemory.current = now;
+        writeStoredActivity(now);
+      }
       setState((prev) => ({
         ...prev,
         session,
@@ -163,7 +178,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let warningTimer: number | undefined;
     let logoutTimer: number | undefined;
     let countdownTimer: number | undefined;
-    let lastActivityAt = parseActivityTimestamp(localStorage.getItem(ACTIVITY_STORAGE_KEY)) ?? Date.now();
+    let lastActivityAt = readStoredActivity() ?? activityMemory.current ?? Date.now();
+    activityMemory.current = lastActivityAt;
     let lastRescheduledAt = Number.NEGATIVE_INFINITY;
     const clearTimers = () => {
       if (warningTimer !== undefined) window.clearTimeout(warningTimer);
@@ -185,7 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }, 1000);
       }, warningDelay);
       logoutTimer = window.setTimeout(() => {
-        const sharedActivity = parseActivityTimestamp(localStorage.getItem(ACTIVITY_STORAGE_KEY));
+        const sharedActivity = readStoredActivity();
         if (sharedActivity !== null && sharedActivity > lastActivityAt) {
           schedule(sharedActivity);
           return;
@@ -196,6 +212,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         try { sessionStorage.removeItem('betzone_nav'); } catch { /* ignore */ }
+        activityMemory.current = null;
+        clearStoredActivity();
         void supabase.auth.signOut();
       }, Math.max(0, INACTIVITY_TIMEOUT_MS - elapsed));
     };
@@ -203,11 +221,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const now = Date.now();
       if (now - lastRescheduledAt < ACTIVITY_THROTTLE_MS) return;
       lastRescheduledAt = now;
-      try {
-        localStorage.setItem(ACTIVITY_STORAGE_KEY, String(now));
-      } catch (error) {
-        console.warn('Could not share activity across tabs', error);
-      }
+      activityMemory.current = now;
+      writeStoredActivity(now);
       schedule(now);
     };
     const onStorage = (event: StorageEvent) => {
@@ -230,6 +245,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       sessionStorage.removeItem('betzone_nav');
     } catch { /* ignore */ }
+    activityMemory.current = null;
+    clearStoredActivity();
     await supabase.auth.signOut();
   };
 

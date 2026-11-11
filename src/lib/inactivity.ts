@@ -12,3 +12,30 @@ export function parseActivityTimestamp(value: string | null): number | null {
 export function inactivityRemaining(lastActivityAt: number, now: number): number {
   return Math.max(0, INACTIVITY_TIMEOUT_MS - Math.max(0, now - lastActivityAt));
 }
+
+// Storage can be blocked (private mode, disabled site data). These helpers
+// never throw; callers keep an in-memory timestamp as the fallback.
+export function readStoredActivity(): number | null {
+  try {
+    return parseActivityTimestamp(localStorage.getItem(ACTIVITY_STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+export function writeStoredActivity(timestamp: number): boolean {
+  try {
+    localStorage.setItem(ACTIVITY_STORAGE_KEY, String(timestamp));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearStoredActivity(): void {
+  try {
+    localStorage.removeItem(ACTIVITY_STORAGE_KEY);
+  } catch {
+    /* storage blocked: nothing to clear */
+  }
+}

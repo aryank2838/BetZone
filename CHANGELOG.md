@@ -104,3 +104,9 @@ No git repository exists in this working copy, so the per-task commits could not
 - Opt-out variable for placeholder legal text: `ALLOW_PLACEHOLDER_LEGAL=1` (exact value `1`).
 - Withdrawing without accepted terms is offered from the terms screen ("Withdraw my balance instead").
 - Recommended Auth rate limit: start at 15 sign-ups/sign-ins per 5 minutes per IP.
+
+## 2026-11-11 — Round 3 (external review)
+
+Each item below is one git commit.
+
+- **R1:** A fresh sign-in no longer logs the user straight out. `betzone_last_activity` is cleared on `signOut()`, on inactivity logout and on every `SIGNED_OUT` event; a real `SIGNED_IN` (user changed) writes the current time before the inactivity timer schedules, while a restored session (`INITIAL_SESSION`) keeps the stored time, so a tab idle for 30+ minutes is still signed out. All `localStorage` access goes through never-throwing helpers in `src/lib/inactivity.ts`, with an in-memory fallback when storage is blocked.
