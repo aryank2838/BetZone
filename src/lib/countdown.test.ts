@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { correctedClockNow, countdownTone, formatBetWindow, formatCountdown, serverClockOffset } from '@/lib/countdown';
+import { correctedClockNow, countdownTone, formatBetWindow, formatClockTime, formatCountdown, serverClockOffset } from '@/lib/countdown';
 
 const now = Date.parse('2026-11-09T12:00:00.000Z');
 
@@ -33,31 +33,42 @@ describe('game cutoff countdown', () => {
 describe('bet window label', () => {
   it('shows Closed with the next opening time even though the server already returns tomorrow\'s cutoff', () => {
     const tomorrowCutoff = new Date(now + 20 * 3_600_000).toISOString();
-    expect(formatBetWindow(false, tomorrowCutoff, '08:00', now)).toBe('Closed · opens at 08:00 IST');
-    expect(formatBetWindow(false, tomorrowCutoff, '08:00:00', now)).toBe('Closed · opens at 08:00 IST');
+    expect(formatBetWindow(false, tomorrowCutoff, '08:00', now)).toBe('Opens at 8:00 AM IST');
+    expect(formatBetWindow(false, tomorrowCutoff, '08:00:00', now)).toBe('Opens at 8:00 AM IST');
+    expect(formatBetWindow(false, tomorrowCutoff, '20:30:00', now)).toBe('Opens at 8:30 PM IST');
   });
 
   it('shows the countdown only while the window is open', () => {
     const cutoff = new Date(now + 3_725_000).toISOString();
-    expect(formatBetWindow(true, cutoff, '08:00', now)).toBe('Open · closes in 1:02:05');
+    expect(formatBetWindow(true, cutoff, '08:00', now)).toBe('Open now · closes in 1:02:05');
   });
 
   it('uses the translated labels for Hindi and Marathi', () => {
     const cutoff = new Date(now + 65_000).toISOString();
-    expect(formatBetWindow(true, cutoff, '08:00', now, 'hi')).toBe('खुला · 1:05 में बंद होगा');
-    expect(formatBetWindow(false, cutoff, '08:00:00', now, 'hi')).toBe('बंद · 08:00 IST पर खुलेगा');
-    expect(formatBetWindow(true, cutoff, '08:00', now, 'mr')).toBe('सुरू · 1:05 मध्ये बंद होईल');
-    expect(formatBetWindow(false, cutoff, '08:00', now, 'mr')).toBe('बंद · 08:00 IST ला सुरू होईल');
-    expect(formatBetWindow(true, cutoff, '08:00', now, 'en')).toBe('Open · closes in 1:05');
+    expect(formatBetWindow(true, cutoff, '08:00', now, 'hi')).toBe('अभी खुला · 1:05 में बंद होगा');
+    expect(formatBetWindow(false, cutoff, '08:00:00', now, 'hi')).toBe('8:00 AM IST पर खुलेगा');
+    expect(formatBetWindow(true, cutoff, '08:00', now, 'mr')).toBe('आता सुरू · 1:05 मध्ये बंद होईल');
+    expect(formatBetWindow(false, cutoff, '08:00', now, 'mr')).toBe('8:00 AM IST ला सुरू होईल');
+    expect(formatBetWindow(true, cutoff, '08:00', now, 'en')).toBe('Open now · closes in 1:05');
   });
 
   it('follows the stored language when none is passed', () => {
     const cutoff = new Date(now + 65_000).toISOString();
     localStorage.setItem('betzone_language', 'hi');
     try {
-      expect(formatBetWindow(true, cutoff, '08:00', now)).toBe('खुला · 1:05 में बंद होगा');
+      expect(formatBetWindow(true, cutoff, '08:00', now)).toBe('अभी खुला · 1:05 में बंद होगा');
     } finally {
       localStorage.removeItem('betzone_language');
     }
+  });
+});
+
+describe('schedule clock times', () => {
+  it('shows IST schedule times in 12-hour format with AM/PM', () => {
+    expect(formatClockTime('08:00')).toBe('8:00 AM');
+    expect(formatClockTime('00:15:00')).toBe('12:15 AM');
+    expect(formatClockTime('12:00:00')).toBe('12:00 PM');
+    expect(formatClockTime('23:59:59')).toBe('11:59 PM');
+    expect(formatClockTime('not a time')).toBe('not a time');
   });
 });

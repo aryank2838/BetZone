@@ -87,16 +87,16 @@ describe('selection bet slip', () => {
     fireEvent.click(screen.getByRole('button', { name: '01' }));
     fireEvent.click(screen.getByRole('button', { name: /Review|Submit/i }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Confirm your bet slip' });
-    expect(within(dialog).getByText('Pick count').nextSibling).toHaveTextContent('2');
-    expect(within(dialog).getByText('Total cost').nextSibling).toHaveTextContent('100');
-    expect(within(dialog).getByText('Play').nextSibling).toHaveTextContent('0');
-    expect(within(dialog).getByText('Wallet').nextSibling).toHaveTextContent('60');
-    expect(within(dialog).getAllByText('4,500 potential win')).toHaveLength(2);
+    const dialog = await screen.findByRole('dialog', { name: 'Check your bets' });
+    expect(within(dialog).getByText('Number of bets').nextSibling).toHaveTextContent('2');
+    expect(within(dialog).getByText('Total to pay').nextSibling).toHaveTextContent('100');
+    expect(within(dialog).getByText('Betting balance').nextSibling).toHaveTextContent('0');
+    expect(within(dialog).getByText('Withdrawable').nextSibling).toHaveTextContent('60');
+    expect(within(dialog).getAllByText('Win ₹4,500')).toHaveLength(2);
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm bets' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Place bets' }));
     await waitFor(() => {
-      expect(within(dialog).getByRole('alert')).toHaveTextContent('Betting has closed for this bet type.');
+      expect(within(dialog).getByRole('alert')).toHaveTextContent('Betting for this is closed right now.');
     });
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { countdownTone, formatBetWindow } from '@/lib/countdown';
+import { countdownTone, formatBetWindow, formatClockTime } from '@/lib/countdown';
 
 export default function CountdownAnnouncement({ cutoff, opensAt, isOpen, nowMs, label }: {
   cutoff: string;
@@ -15,7 +15,7 @@ export default function CountdownAnnouncement({ cutoff, opensAt, isOpen, nowMs, 
     if (tone === lastTone.current) return;
     lastTone.current = tone;
     setAnnouncement(!isOpen
-      ? `${label} closed. Opens at ${opensAt.slice(0, 5)} IST`
+      ? `${label} are closed. They open at ${formatClockTime(opensAt)} IST`
       : tone === 'amber'
         ? `${label} closes in under 10 minutes`
       : tone === 'red'

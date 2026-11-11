@@ -5,7 +5,7 @@ import type { Game, SelectionEntry, GameResult, SavedSelection } from '@/types';
 import { GAME_LABELS, BET_TYPES, isCloseBet, isValidPattiCombo } from '@/types';
 import { useGameStatus } from '@/lib/useGameStatus';
 import { useBetLimits } from '@/lib/betLimits';
-import { countdownTone, formatBetWindow } from '@/lib/countdown';
+import { countdownTone, formatBetWindow, formatClockTime } from '@/lib/countdown';
 import { friendlyError, friendlyErrorDetails } from '@/lib/errors';
 import { useMyLimits, activePlayRestriction, formatLimitEnd } from '@/lib/useMyLimits';
 import HelpButton from '@/components/HelpButton';
@@ -34,18 +34,15 @@ interface PendingPick {
   points: number;
 }
 
-function formatScheduleTime(time: string, locale: string): string {
-  const [hours, minutes] = time.split(':').map(Number);
-  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString(locale, {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+// Schedule times are IST wall-clock times; always show them as "8:00 AM".
+function formatScheduleTime(time: string): string {
+  return formatClockTime(time);
 }
 
 export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFunds }: SelectionScreenProps) {
   const { formatNumber, formatDate } = useFormat();
   const { profile } = useAuth();
-  const { language, locale, t } = useT();
+  const { language, t } = useT();
   const betLimits = useBetLimits();
   const [tab, setTab] = useState<Tab>('jodi');
   const [lockedByType, setLockedByType] = useState<Record<string, Map<string, number>>>({});
@@ -450,8 +447,8 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
             <Lock className="w-4 h-4 text-slate-400 shrink-0" />
             <p className="text-sm text-slate-400">
               {status
-                ? `This bet type is closed. Open bets close ${formatScheduleTime(status.open_bets_close_at, locale)}; close bets close ${formatScheduleTime(status.close_bets_close_at, locale)} (IST). You can still view results below.`
-                : `Betting is unavailable because the game schedule could not be loaded${statusError ? `: ${statusError}` : '.'}`}
+                ? `Betting is closed for this right now. Betting opens at ${formatScheduleTime(status.bets_open_at)} IST. Open bets close at ${formatScheduleTime(status.open_bets_close_at)} and close bets at ${formatScheduleTime(status.close_bets_close_at)} IST. You can still see results below.`
+                : `We couldn't load the game times, so betting is paused${statusError ? `: ${statusError}` : '.'} Please try again.`}
             </p>
             {!status && statusErrorDetails && <p className="mt-1 text-xs text-rose-400/70">{statusErrorDetails}</p>}
             {!status && <button type="button" onClick={() => void refresh()} className="ml-auto text-xs font-semibold text-slate-300">Retry</button>}
@@ -461,7 +458,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
       {restriction && (
         <div className="max-w-2xl mx-auto px-5 pt-4">
           <div className="rounded-xl border border-amber-800 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
-            {restriction.kind === 'cooldown' ? 'Betting break active' : 'Self-exclusion active'} until {formatLimitEnd(restriction.until)}. Betting is disabled.
+            {restriction.kind === 'cooldown' ? 'You are on a betting break' : 'You have paused your account'} until {formatLimitEnd(restriction.until)}, so you can't place bets right now.
           </div>
         </div>
       )}
@@ -476,7 +473,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
               const tone = isOpen ? countdownTone(cutoffTs, nowMs) : 'closed';
               return (
                 <p key={label} className={tone === 'red' || tone === 'closed' ? 'text-rose-400' : tone === 'amber' ? 'text-amber-400' : 'text-slate-400'}>
-                  {label} · {formatScheduleTime(cutoffAt, locale)} IST · {formatBetWindow(isOpen, cutoffTs, status.bets_open_at, nowMs, language)}
+                  {label} · {formatBetWindow(isOpen, cutoffTs, status.bets_open_at, nowMs, language)}{isOpen ? ` (last bet ${formatScheduleTime(cutoffAt)} IST)` : ''}
                   <CountdownAnnouncement cutoff={cutoffTs} opensAt={status.bets_open_at} isOpen={isOpen} nowMs={nowMs} label={label} />
                 </p>
               );

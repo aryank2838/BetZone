@@ -140,7 +140,7 @@ export default function Dashboard() {
               aria-label={t('dashboard.viewBalance')}
             >
               <Wallet className="w-4 h-4 text-emerald-400" />
-              <span className="text-sm font-bold text-white">{totalBalance === null ? '—' : formatNumber(totalBalance)}</span>
+              <span className="text-sm font-bold text-white">{totalBalance === null ? '—' : `₹${formatNumber(totalBalance)}`}</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
             </button>
             <button
@@ -193,8 +193,7 @@ export default function Dashboard() {
           <div className="relative">
             <p className="text-xs font-medium uppercase tracking-widest text-slate-400 mb-1">{t('dashboard.totalBalance')}</p>
             <div className="flex items-baseline gap-2">
-              <p className="text-4xl font-bold text-white tracking-tight">{totalBalance === null ? '—' : formatNumber(totalBalance)}</p>
-              <p className="text-slate-400 text-sm">{t('dashboard.balanceUnit')}</p>
+              <p className="text-4xl font-bold text-white tracking-tight">{totalBalance === null ? '—' : `₹${formatNumber(totalBalance)}`}</p>
             </div>
             <div className="flex gap-6 mt-4">
               <div>
@@ -277,12 +276,12 @@ export default function Dashboard() {
                 <div className="flex justify-center gap-3 mt-1">
                   {r.open_digit && (
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${r.open_processed ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'}`}>
-                      Open {r.open_processed ? 'paid' : 'pending'}
+                      Open {r.open_processed ? 'paid out' : 'payout pending'}
                     </span>
                   )}
                   {r.close_digit && (
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${r.close_processed ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'}`}>
-                      Close {r.close_processed ? 'paid' : 'pending'}
+                      Close {r.close_processed ? 'paid out' : 'payout pending'}
                     </span>
                   )}
                 </div>
@@ -315,8 +314,8 @@ export default function Dashboard() {
                       <p className="font-bold text-white text-base">{status.label || GAME_LABELS[status.game]}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                         {([
-                          ['Open', status.open_bets_open, status.open_bets_close_ts],
-                          ['Close', status.close_bets_open, status.close_bets_close_ts],
+                          ['Open bets', status.open_bets_open, status.open_bets_close_ts],
+                          ['Close bets', status.close_bets_open, status.close_bets_close_ts],
                         ] as const).map(([label, schedule, cutoff]) => {
                           const tone = schedule ? countdownTone(cutoff, nowMs) : 'closed';
                           return (
@@ -330,7 +329,7 @@ export default function Dashboard() {
                                 opensAt={status.bets_open_at}
                                 isOpen={schedule}
                                 nowMs={nowMs}
-                                label={`${label} bets`}
+                                label={label}
                               />
                             </span>
                           );
