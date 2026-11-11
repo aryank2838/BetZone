@@ -8,11 +8,11 @@ import { friendlyErrorDetails } from '@/lib/errors';
 import PasswordRecoveryScreen from '@/components/PasswordRecoveryScreen';
 import LegalPage, { type LegalDocument } from '@/components/LegalPage';
 import { useDialogA11y } from '@/lib/useDialogA11y';
-import { TERMS_VERSION } from '@/lib/terms';
+import { TERMS_VERSION, needsTermsAcceptance } from '@/lib/terms';
 import HelpButton from '@/components/HelpButton';
 import WithdrawalForm, { type WalletStatus } from '@/components/WithdrawalForm';
 
-function Gate() {
+export function Gate() {
   const { user, profile, profileError, profileErrorDetails, loading, refreshProfile, passwordRecovery, inactivityWarning, signOut } = useAuth();
 
   if (loading) {
@@ -49,7 +49,9 @@ function Gate() {
   }
 
   if (passwordRecovery) return <PasswordRecoveryScreen />;
-  if (user && profile && !profile.terms_accepted_at) return <TermsAcceptance onAccepted={refreshProfile} onSignOut={signOut} />;
+  if (user && profile && needsTermsAcceptance(profile)) {
+    return <TermsAcceptance onAccepted={refreshProfile} onSignOut={signOut} updated={!!profile.terms_accepted_at} />;
+  }
   return <>{user ? <Dashboard /> : <AuthScreen />}{inactivityWarning !== null && (
     <div role="status" className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] left-1/2 z-[80] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-950 px-4 py-3 text-sm text-amber-100 shadow-xl">
       You will be signed out for inactivity in {inactivityWarning} seconds. Interact with the page to stay signed in.
@@ -57,7 +59,12 @@ function Gate() {
   )}</>;
 }
 
-export function TermsAcceptance({ onAccepted, onSignOut }: { onAccepted: () => Promise<void>; onSignOut: () => Promise<void> }) {
+export function TermsAcceptance({ onAccepted, onSignOut, updated = false }: {
+  onAccepted: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+  /** The user accepted an older version; explain why they are asked again. */
+  updated?: boolean;
+}) {
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -82,7 +89,8 @@ export function TermsAcceptance({ onAccepted, onSignOut }: { onAccepted: () => P
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/95 p-5 text-slate-100">
       <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="terms-required-title" className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-6">
-        <h1 id="terms-required-title" className="text-xl font-bold">Confirm your age and accept the terms</h1>
+        <h1 id="terms-required-title" className="text-xl font-bold">{updated ? 'Our terms have been updated' : 'Confirm your age and accept the terms'}</h1>
+        {updated && <p className="text-sm text-amber-200">The Terms and Privacy Policy have changed since you last accepted them. Please review and accept the new version to continue.</p>}
         <p className="text-sm text-slate-300">You must confirm that you are 18 or older and accept the Terms and Privacy Policy to continue using the app.</p>
         <nav className="flex gap-4 text-sm text-cyan-300 underline">
           <button type="button" onClick={() => setDocument('terms')}>Terms</button><button type="button" onClick={() => setDocument('privacy')}>Privacy Policy</button>

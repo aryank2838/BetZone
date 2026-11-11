@@ -1597,4 +1597,20 @@ BEGIN
 END
 $r6_test$;
 
+-- ---------------------------------------------------------------------------
+-- R7: get_public_rules exposes the current terms version; users who accepted
+-- an older version can still bet and deposit (only the frontend re-asks).
+-- ---------------------------------------------------------------------------
+DO $r7_test$
+DECLARE
+  v_rules jsonb;
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000002', true);
+  v_rules := public.get_public_rules();
+  IF v_rules->>'current_terms_version' IS DISTINCT FROM '2026-11-10' THEN
+    RAISE EXCEPTION 'R7: get_public_rules current_terms_version is %, expected 2026-11-10 (src/lib/terms.ts)', v_rules->>'current_terms_version';
+  END IF;
+END
+$r7_test$;
+
 ROLLBACK;

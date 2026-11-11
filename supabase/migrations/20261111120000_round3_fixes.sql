@@ -594,3 +594,33 @@ END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.admin_get_exposure(text, date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.admin_get_exposure(text, date) TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- R7. Current terms version. The frontend re-asks for terms when
+-- profiles.terms_version differs; the server still accepts any non-null
+-- terms_accepted_at for betting and deposits, so a deploy locks nobody out.
+-- get_public_rules() returns internal_rule_constants() merged with its own
+-- lists, so current_terms_version is exposed there without other changes.
+-- Keep in sync with TERMS_VERSION in src/lib/terms.ts.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.internal_rule_constants()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
+  RETURN jsonb_build_object(
+    'minimum_withdrawal', 100,
+    'maximum_withdrawal', 100000,
+    'approved_deposit_minimum', 100,
+    'maximum_add_funds', 100000,
+    'turnover_multiplier', 1,
+    'maximum_bet', 5000,
+    'maximum_submit', 20000,
+    'current_terms_version', '2026-11-10'
+  );
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.internal_rule_constants() FROM PUBLIC, anon, authenticated;
