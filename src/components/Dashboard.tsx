@@ -30,7 +30,7 @@ export default function Dashboard() {
   const { user, profile, signOut, refreshProfile } = useAuth();
   const { nav, navigate, goHome } = useNav();
   const { statuses: gameStatuses, loading: gameStatusLoading, error: gameStatusError, errorDetails: gameStatusErrorDetails, nowMs, refresh: refreshGameStatus } = useGameStatus();
-  const { t } = useT();
+  const { t, language } = useT();
   const [results, setResults] = useState<Partial<Record<Game, GameResult | null>>>({});
   const [resultsError, setResultsError] = useState<{ message: string; raw?: string } | null>(null);
   const [resultsRefresh, setResultsRefresh] = useState(0);
@@ -324,7 +324,7 @@ export default function Dashboard() {
                               tone === 'red' || tone === 'closed' ? 'text-rose-400' : tone === 'amber' ? 'text-amber-400' : 'text-slate-400'
                             }`}>
                               <Clock className="h-3 w-3" />
-                              {label} · {formatBetWindow(schedule, cutoff, status.bets_open_at, nowMs)}
+                              {label} · {formatBetWindow(schedule, cutoff, status.bets_open_at, nowMs, language)}
                               <CountdownAnnouncement
                                 cutoff={cutoff}
                                 opensAt={status.bets_open_at}

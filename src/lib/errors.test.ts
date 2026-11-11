@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { friendlyError, friendlyErrorDetails, rawErrorMessage } from '@/lib/errors';
+import { formatServerTimestamp, friendlyError, friendlyErrorDetails, rawErrorMessage } from '@/lib/errors';
+import { formatDate } from '@/i18n/format';
+
+/** Expected rendering of a server timestamp: IST date/time in the stored language. */
+const ist = (iso: string) => `${formatDate(Date.parse(iso), { dateStyle: 'medium', timeStyle: 'short' })} IST`;
 import { translate, type Language, type TranslationKey } from '@/i18n/context';
 
 describe('friendlyError', () => {
@@ -37,19 +41,19 @@ describe('friendlyError', () => {
     [
       'Betting is paused until 2026-11-10 18:00:00+05:30 due to your cooldown.',
       'errors.cooldown',
-      { date: '2026-11-10 18:00:00+05:30' },
+      { date: () => ist('2026-11-10T12:30:00Z') },
       'help',
     ],
     [
       'Betting is unavailable until your self-exclusion ends on 2026-11-17 00:00:00+05:30.',
       'errors.selfExclusionBetting',
-      { date: '2026-11-17 00:00:00+05:30' },
+      { date: () => ist('2026-11-16T18:30:00Z') },
       'help',
     ],
     [
       'Deposits are unavailable until your self-exclusion ends on 2026-11-17 00:00:00+05:30.',
       'errors.selfExclusionDeposits',
-      { date: '2026-11-17 00:00:00+05:30' },
+      { date: () => ist('2026-11-16T18:30:00Z') },
       'help',
     ],
     [
@@ -85,8 +89,20 @@ describe('friendlyError', () => {
     [
       'Add at least 100 approved deposit points before requesting a withdrawal.',
       'errors.depositRequirement',
-      {},
+      { points: '100' },
       'add_funds',
+    ],
+    [
+      'Add at least 250 approved deposit points before requesting a withdrawal.',
+      'errors.depositRequirement',
+      { points: '250' },
+      'add_funds',
+    ],
+    [
+      'This payment reference has already been used.',
+      'errors.duplicateReference',
+      {},
+      'help',
     ],
     [
       'Please try again.',
@@ -100,11 +116,31 @@ describe('friendlyError', () => {
       for (const language of ['en', 'hi', 'mr'] as Language[]) {
         localStorage.setItem('betzone_language', language);
         const template = translate(key as TranslationKey, language);
-        const expected = template.replace(/\{(\w+)\}/g, (placeholder, name: string) => values[name as keyof typeof values] ?? placeholder);
+        const expected = template.replace(/\{(\w+)\}/g, (placeholder, name: string) => {
+          const value = (values as Record<string, string | (() => string)>)[name];
+          if (value === undefined) return placeholder;
+          return typeof value === 'function' ? value() : value;
+        });
         const result = friendlyError(new Error(raw));
         expect(result).toMatchObject({ key, message: expected, action });
         expect(result.message).not.toMatch(/\{\w+\}/);
       }
     },
   );
+});
+
+describe('server timestamps in error messages', () => {
+  it('formats a raw Postgres UTC timestamp as an IST date and time', () => {
+    localStorage.setItem('betzone_language', 'en');
+    const formatted = formatServerTimestamp('2026-11-11 04:30:00.123456+00');
+    expect(formatted).toBe(ist('2026-11-11T04:30:00Z'));
+    expect(formatted).toMatch(/10:00/);
+    expect(formatted).not.toMatch(/\+00|04:30/);
+    expect(formatServerTimestamp('2026-11-11T04:30:00Z')).toBe(formatted);
+    expect(formatServerTimestamp('2026-11-11 10:00:00+05:30')).toBe(formatted);
+    expect(formatServerTimestamp('not a date')).toBe('not a date');
+
+    const result = friendlyError(new Error('Betting is paused until 2026-11-11 04:30:00.123456+00 due to your cooldown.'));
+    expect(result.message).toBe(`Betting is paused until ${formatted} because of your cooldown.`);
+  });
 });

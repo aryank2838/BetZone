@@ -38,6 +38,15 @@ export function initializeMonitoring() {
         event.request = { ...request, url: location.origin, method: event.request.method };
       }
       if (event.message) event.message = scrub(event.message) as string;
+      // Exception messages can quote user input; scrub only the text, never the stack trace.
+      if (event.exception?.values) {
+        event.exception = {
+          ...event.exception,
+          values: event.exception.values.map((exception) => (
+            typeof exception.value === 'string' ? { ...exception, value: scrub(exception.value) as string } : exception
+          )),
+        };
+      }
       event.extra = scrub(event.extra) as Record<string, unknown> | undefined;
       event.breadcrumbs = scrub(event.breadcrumbs) as typeof event.breadcrumbs;
       return event;

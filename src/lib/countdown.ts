@@ -1,3 +1,5 @@
+import { interpolate, translate, type Language } from '@/i18n/context';
+
 export function formatCountdown(cutoff: string, nowMs: number): string {
   const cutoffMs = Date.parse(cutoff);
   if (!Number.isFinite(cutoffMs) || !Number.isFinite(nowMs)) return '--:--';
@@ -10,9 +12,10 @@ export function formatCountdown(cutoff: string, nowMs: number): string {
     : `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-export function formatBetWindow(isOpen: boolean, cutoff: string, opensAt: string, nowMs: number): string {
-  if (!isOpen) return `Closed · opens at ${opensAt.slice(0, 5)} IST`;
-  return `Open · closes in ${formatCountdown(cutoff, nowMs)}`;
+/** Language defaults to the stored choice, read at call (render) time. */
+export function formatBetWindow(isOpen: boolean, cutoff: string, opensAt: string, nowMs: number, language?: Language): string {
+  if (!isOpen) return interpolate(translate('countdown.closed', language), { time: opensAt.slice(0, 5) });
+  return interpolate(translate('countdown.open', language), { time: formatCountdown(cutoff, nowMs) });
 }
 
 export function countdownTone(cutoff: string, nowMs: number): 'normal' | 'amber' | 'red' | 'closed' {

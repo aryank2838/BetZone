@@ -1613,4 +1613,37 @@ BEGIN
 END
 $r7_test$;
 
+-- ---------------------------------------------------------------------------
+-- R8: a payment reference already used by a pending or approved request is
+-- rejected with a clear message (case-insensitive); a rejected one may be reused.
+-- Runs as user 6 (no pending deposit) after the user-flow block above created
+-- the pending request E1AUTHDEPOSIT1.
+-- ---------------------------------------------------------------------------
+DO $r8_test$
+DECLARE
+  v_error text;
+  v_result jsonb;
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub', '00000000-0000-4000-8000-000000000006', true);
+  IF NOT EXISTS (SELECT 1 FROM public.add_funds_requests WHERE payment_ref = 'E1AUTHDEPOSIT1' AND status = 'pending') THEN
+    RAISE EXCEPTION 'R8 fixture: pending request E1AUTHDEPOSIT1 not found';
+  END IF;
+  v_error := NULL;
+  BEGIN
+    PERFORM public.request_add_funds(100, 'e1authdeposit1', NULL);
+  EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT;
+  END;
+  IF v_error IS DISTINCT FROM 'This payment reference has already been used.' THEN
+    RAISE EXCEPTION 'R8: duplicate payment reference gave %', COALESCE(v_error, 'no error');
+  END IF;
+
+  INSERT INTO public.add_funds_requests (user_id, amount, status, payment_ref)
+  VALUES ('00000000-0000-4000-8000-000000000002', 50, 'rejected', 'R8REJECTEDREF1');
+  v_result := public.request_add_funds(100, 'R8REJECTEDREF1', NULL);
+  IF v_result->>'status' <> 'pending' THEN
+    RAISE EXCEPTION 'R8: a reference used only by a rejected request could not be reused: %', v_result;
+  END IF;
+END
+$r8_test$;
+
 ROLLBACK;

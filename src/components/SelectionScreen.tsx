@@ -45,7 +45,7 @@ function formatScheduleTime(time: string, locale: string): string {
 export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFunds }: SelectionScreenProps) {
   const { formatNumber, formatDate } = useFormat();
   const { profile } = useAuth();
-  const { locale, t } = useT();
+  const { language, locale, t } = useT();
   const betLimits = useBetLimits();
   const [tab, setTab] = useState<Tab>('jodi');
   const [lockedByType, setLockedByType] = useState<Record<string, Map<string, number>>>({});
@@ -476,7 +476,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
               const tone = isOpen ? countdownTone(cutoffTs, nowMs) : 'closed';
               return (
                 <p key={label} className={tone === 'red' || tone === 'closed' ? 'text-rose-400' : tone === 'amber' ? 'text-amber-400' : 'text-slate-400'}>
-                  {label} · {formatScheduleTime(cutoffAt, locale)} IST · {formatBetWindow(isOpen, cutoffTs, status.bets_open_at, nowMs)}
+                  {label} · {formatScheduleTime(cutoffAt, locale)} IST · {formatBetWindow(isOpen, cutoffTs, status.bets_open_at, nowMs, language)}
                   <CountdownAnnouncement cutoff={cutoffTs} opensAt={status.bets_open_at} isOpen={isOpen} nowMs={nowMs} label={label} />
                 </p>
               );

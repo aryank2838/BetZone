@@ -65,11 +65,39 @@ describe('Sentry event scrubbing', () => {
     expect(JSON.stringify(result.breadcrumbs)).not.toContain('person@example.com');
     expect(JSON.stringify(result.breadcrumbs)).not.toContain('payer@bank');
     expect(JSON.stringify(result.breadcrumbs)).not.toContain('ABCD12345678');
-    expect(result.exception).toEqual(event.exception);
+    expect(result.exception?.values?.[0]?.value).toBe('sample');
     expect(result.exception?.values?.[0]?.stacktrace?.frames?.[0]).toEqual({
       filename: 'https://app.example/assets/app.js',
       function: 'submitPayment',
       abs_path: 'C:/app/src/payment.ts',
     });
+  });
+
+  it('scrubs exception message text but leaves the stack trace untouched', () => {
+    vi.stubEnv('VITE_SENTRY_DSN', 'https://public@example.ingest.sentry.io/123');
+    initializeMonitoring();
+    const options = sentryMock.init.mock.calls[0][0];
+    const stacktrace = {
+      frames: [{ filename: 'https://app.example/assets/app.js', function: 'requestWithdrawal', lineno: 12, colno: 7 }],
+    };
+    const event = {
+      exception: {
+        values: [
+          { type: 'Error', value: 'Withdrawal to payer@okaxis for person@example.com failed, UTR: ABCD12345678', stacktrace },
+          { type: 'TypeError', stacktrace },
+        ],
+      },
+    };
+
+    const result = options.beforeSend(event);
+    const [first, second] = result.exception.values;
+    expect(first.value).not.toContain('payer@okaxis');
+    expect(first.value).not.toContain('person@example.com');
+    expect(first.value).not.toContain('ABCD12345678');
+    expect(first.value).toContain('Withdrawal to');
+    expect(first.type).toBe('Error');
+    expect(first.stacktrace).toBe(stacktrace);
+    expect(second).toEqual({ type: 'TypeError', stacktrace });
+    expect(second.stacktrace).toBe(stacktrace);
   });
 });

@@ -41,4 +41,23 @@ describe('bet window label', () => {
     const cutoff = new Date(now + 3_725_000).toISOString();
     expect(formatBetWindow(true, cutoff, '08:00', now)).toBe('Open · closes in 1:02:05');
   });
+
+  it('uses the translated labels for Hindi and Marathi', () => {
+    const cutoff = new Date(now + 65_000).toISOString();
+    expect(formatBetWindow(true, cutoff, '08:00', now, 'hi')).toBe('खुला · 1:05 में बंद होगा');
+    expect(formatBetWindow(false, cutoff, '08:00:00', now, 'hi')).toBe('बंद · 08:00 IST पर खुलेगा');
+    expect(formatBetWindow(true, cutoff, '08:00', now, 'mr')).toBe('सुरू · 1:05 मध्ये बंद होईल');
+    expect(formatBetWindow(false, cutoff, '08:00', now, 'mr')).toBe('बंद · 08:00 IST ला सुरू होईल');
+    expect(formatBetWindow(true, cutoff, '08:00', now, 'en')).toBe('Open · closes in 1:05');
+  });
+
+  it('follows the stored language when none is passed', () => {
+    const cutoff = new Date(now + 65_000).toISOString();
+    localStorage.setItem('betzone_language', 'hi');
+    try {
+      expect(formatBetWindow(true, cutoff, '08:00', now)).toBe('खुला · 1:05 में बंद होगा');
+    } finally {
+      localStorage.removeItem('betzone_language');
+    }
+  });
 });

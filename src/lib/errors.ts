@@ -1,6 +1,7 @@
 import { friendlyAuthError } from '@/lib/friendlyAuthError';
 import { translate } from '@/i18n/useT';
 import type { TranslationKey } from '@/i18n/context';
+import { formatDate } from '@/i18n/format';
 
 export type FriendlyErrorAction = 'add_funds' | 'login' | 'retry' | 'help';
 
@@ -19,6 +20,26 @@ function mappedError(
 ): FriendlyError {
   const message = translate(key).replace(/\{(\w+)\}/g, (placeholder, name: string) => values[name] ?? placeholder);
   return { message, action, key };
+}
+
+/**
+ * Postgres prints timestamptz as e.g. "2026-11-11 04:30:00.123456+00" (session
+ * time zone, often UTC). Show it as a readable IST date/time instead; anything
+ * that does not parse is returned unchanged.
+ */
+export function formatServerTimestamp(value: string): string {
+  const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)\s*(Z|[+-]\d{2}(?::?\d{2})?)?$/i);
+  if (!match) return value;
+  const [, day, time, zone] = match;
+  let offset = 'Z';
+  if (zone && zone.toUpperCase() !== 'Z') {
+    const digits = zone.replace(':', '');
+    offset = `${digits.slice(0, 3)}:${digits.slice(3, 5) || '00'}`;
+  }
+  // Keep milliseconds only: Postgres prints microseconds.
+  const ms = Date.parse(`${day}T${time.replace(/(\.\d{3})\d+$/, '$1')}${offset}`);
+  if (!Number.isFinite(ms)) return value;
+  return `${formatDate(ms, { dateStyle: 'medium', timeStyle: 'short' })} IST`;
 }
 
 export function rawErrorMessage(error: unknown): string {
@@ -50,15 +71,15 @@ export function friendlyError(error: unknown): FriendlyError {
   }
   const cooldown = raw.match(/^Betting is paused until (.+) due to your cooldown\.$/i);
   if (cooldown) {
-    return mappedError('errors.cooldown', 'help', { date: cooldown[1] });
+    return mappedError('errors.cooldown', 'help', { date: formatServerTimestamp(cooldown[1]) });
   }
   const bettingExclusion = raw.match(/^Betting is unavailable until your self-exclusion ends on (.+?)\.?$/i);
   if (bettingExclusion) {
-    return mappedError('errors.selfExclusionBetting', 'help', { date: bettingExclusion[1] });
+    return mappedError('errors.selfExclusionBetting', 'help', { date: formatServerTimestamp(bettingExclusion[1]) });
   }
   const depositExclusion = raw.match(/^Deposits are unavailable until your self-exclusion ends on (.+?)\.?$/i);
   if (depositExclusion) {
-    return mappedError('errors.selfExclusionDeposits', 'help', { date: depositExclusion[1] });
+    return mappedError('errors.selfExclusionDeposits', 'help', { date: formatServerTimestamp(depositExclusion[1]) });
   }
   const dailyDeposit = raw.match(/^Daily deposit limit reached\. Limit: (.+?) points; today: (.+?) points\.?$/i);
   if (dailyDeposit) {
@@ -72,8 +93,12 @@ export function friendlyError(error: unknown): FriendlyError {
   if (withdrawalTurnover) {
     return mappedError('errors.withdrawalTurnover', 'help', { points: withdrawalTurnover[1] });
   }
-  if (/^Add at least 100 approved deposit points before requesting a withdrawal\.?$/i.test(raw)) {
-    return mappedError('errors.depositRequirement', 'add_funds');
+  const depositMinimum = raw.match(/^Add at least (\d+) approved deposit points before requesting a withdrawal\.?$/i);
+  if (depositMinimum) {
+    return mappedError('errors.depositRequirement', 'add_funds', { points: depositMinimum[1] });
+  }
+  if (message === 'this payment reference has already been used.') {
+    return mappedError('errors.duplicateReference', 'help');
   }
   if (raw === 'Please try again.') {
     return mappedError('errors.retry', 'retry');

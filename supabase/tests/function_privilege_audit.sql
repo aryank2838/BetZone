@@ -37,8 +37,6 @@ INSERT INTO function_execute_allowlist (grantee, routine_name) VALUES
   ('authenticated', 'admin_set_admin'),
   ('authenticated', 'admin_set_app_setting'),
   ('authenticated', 'admin_toggle_ban'),
-  ('authenticated', 'award_ad_reward'),
-  ('authenticated', 'get_ad_reward_status'),
   ('authenticated', 'get_all_latest_results'),
   ('authenticated', 'get_app_setting'),
   ('authenticated', 'get_balance_breakdown'),
