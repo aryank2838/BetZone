@@ -21,7 +21,8 @@ import { CardSkeleton } from '@/components/Skeleton';
 import CountdownAnnouncement from '@/components/CountdownAnnouncement';
 import { interpolate, useT } from '@/i18n/useT';
 import { useFormat } from '@/i18n/useFormat';
-import { LogOut, Zap, Wallet, Shield, ChevronRight, Trophy, TrendingUp, Clock, Loader2, ReceiptText } from 'lucide-react';
+import { LogOut, Zap, Wallet, Shield, ChevronRight, Trophy, TrendingUp, Clock, Loader2, ReceiptText, CalendarOff } from 'lucide-react';
+import { holidayMessage, isOnHoliday } from '@/lib/holiday';
 
 const AdminPanel = lazy(() => import('@/components/AdminPanel'));
 
@@ -312,6 +313,12 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="font-bold text-white text-base">{status.label || GAME_LABELS[status.game]}</p>
+                      {isOnHoliday(status) ? (
+                        <div className="mt-1 text-[11px] text-amber-300">
+                          <p className="flex items-center gap-1"><CalendarOff className="h-3 w-3" /> {holidayMessage(status)}</p>
+                          {status.holiday_note && <p className="mt-0.5 text-amber-200/80">{status.holiday_note}</p>}
+                        </div>
+                      ) : (
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                         {([
                           ['Open bets', status.open_bets_open, status.open_bets_close_ts],
@@ -335,6 +342,7 @@ export default function Dashboard() {
                           );
                         })}
                       </div>
+                      )}
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-slate-700 group-hover:text-slate-500 transition-colors" />

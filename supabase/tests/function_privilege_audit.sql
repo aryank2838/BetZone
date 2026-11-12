@@ -36,6 +36,7 @@ INSERT INTO function_execute_allowlist (grantee, routine_name) VALUES
   ('authenticated', 'admin_process_withdrawal'),
   ('authenticated', 'admin_set_admin'),
   ('authenticated', 'admin_set_app_setting'),
+  ('authenticated', 'admin_set_game_holiday'),
   ('authenticated', 'admin_toggle_ban'),
   ('authenticated', 'get_all_latest_results'),
   ('authenticated', 'get_app_setting'),

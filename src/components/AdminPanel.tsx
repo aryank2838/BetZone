@@ -9,6 +9,7 @@ import { friendlyErrorDetails } from '@/lib/errors';
 import StatsTab, { type AdminStats } from '@/components/admin/StatsTab';
 import SelectionsTab, { type AdminSelection } from '@/components/admin/SelectionsTab';
 import SettingsTab from '@/components/admin/SettingsTab';
+import HolidaySettings from '@/components/admin/HolidaySettings';
 import UsersTab, { type AdminUser } from '@/components/admin/UsersTab';
 import RequestsTab, { type AddFundsRequest, type AdminListFilter, type WithdrawalRequest } from '@/components/admin/RequestsTab';
 import SupportTab from '@/components/admin/SupportTab';
@@ -176,7 +177,7 @@ type Tab = 'results' | 'requests' | 'users' | 'selections' | 'stats' | 'settings
 
 export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelProps) {
   const { formatNumber } = useFormat();
-  const { statuses: gameStatuses } = useGameStatus();
+  const { statuses: gameStatuses, refresh: refreshGameStatuses } = useGameStatus();
   const gameOptions = gameStatuses.map((status) => ({ game: status.game, label: status.label || GAME_LABELS[status.game] || status.game }));
   const [tab, setTab] = useState<Tab>(initialTab);
   const [game, setGame] = useState<Game>('test');
@@ -957,6 +958,9 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
             meta={settingsMeta}
             onSave={(key, value) => { void handleSaveSetting(key, value); }}
           />
+        )}
+        {tab === 'settings' && (
+          <HolidaySettings statuses={gameStatuses} onChanged={() => { void refreshGameStatuses(); }} />
         )}
         {tab === 'support' && <SupportTab />}
         {tab === 'reports' && <ReportsTab />}

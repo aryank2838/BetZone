@@ -120,6 +120,9 @@ export interface GameStatus {
   server_ist_date: string;
   server_ist_time: string;
   close_result_next_day: boolean;
+  on_holiday?: boolean;
+  holiday_reopens_on?: string | null;
+  holiday_note?: string | null;
 }
 
 export const isCloseBet = (betType: BetType) =>

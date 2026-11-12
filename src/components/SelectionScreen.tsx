@@ -18,7 +18,9 @@ import { calculateBetSlip } from '@/lib/betSlip';
 import {
   ArrowLeft, Loader2, CheckCircle2, Lock, Plus, Trophy, Hash, Grid3x3,
   Sparkles, TrendingUp,
+  CalendarOff,
 } from 'lucide-react';
+import { holidayMessage, isOnHoliday } from '@/lib/holiday';
 
 interface SelectionScreenProps {
   game: Game;
@@ -441,7 +443,18 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
         </div>
       )}
 
-      {checkedStatus && !betOpen && (
+      {checkedStatus && status && isOnHoliday(status) && (
+        <div className="max-w-2xl mx-auto px-5 pt-5">
+          <div className="flex items-start gap-2.5 border border-amber-800 bg-amber-950/30 rounded-2xl p-4">
+            <CalendarOff className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-200">
+              <p>{holidayMessage(status)}</p>
+              {status.holiday_note && <p className="mt-1 text-amber-200/80">{status.holiday_note}</p>}
+            </div>
+          </div>
+        </div>
+      )}
+      {checkedStatus && !betOpen && !isOnHoliday(status) && (
         <div className="max-w-2xl mx-auto px-5 pt-5">
           <div className="flex items-center gap-2.5 border border-slate-800 bg-slate-900/80 rounded-2xl p-4">
             <Lock className="w-4 h-4 text-slate-400 shrink-0" />
@@ -463,7 +476,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
         </div>
       )}
 
-      {status && (
+      {status && !isOnHoliday(status) && (
         <div className="max-w-2xl mx-auto px-5 pt-4">
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs">
             {([
