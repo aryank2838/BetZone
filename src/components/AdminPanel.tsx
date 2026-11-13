@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
-  ArrowLeft, Loader2, Trophy, Users, Wallet, BarChart3, X, ListChecks, Settings,
+  Loader2, Trophy, Users, Wallet, BarChart3, X, ListChecks, Settings, MoreHorizontal, LifeBuoy, FileText,
 } from 'lucide-react';
 import { BET_TYPES, GAME_LABELS, isValidPatti, pattiDigit, type BetType, type Game, type GameResult } from '@/types';
 import { useGameStatus } from '@/lib/useGameStatus';
@@ -21,10 +21,21 @@ import { useFormat } from '@/i18n/useFormat';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import { confirmationContent, type AdminConfirmation } from '@/components/admin/confirmations';
 import type { AdminSettingRow } from '@/components/admin/SettingsTab';
+import PageHeader from '@/components/ui/PageHeader';
+import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
+import { Card } from '@/components/ui/Card';
+import { useAdminAlerts } from '@/lib/adminAlertsContext';
+import { formatClockTime } from '@/lib/countdown';
+import { currentResultRound } from '@/lib/adminOverview';
+
+export type AdminTab = 'results' | 'requests' | 'users' | 'selections' | 'stats' | 'settings' | 'support' | 'reports';
 
 interface AdminPanelProps {
   onBack: () => void;
-  initialTab?: 'results' | 'requests' | 'users' | 'selections' | 'stats' | 'settings' | 'support' | 'reports';
+  initialTab?: AdminTab;
+  /** Preselects this game on the Results tab (e.g. from an overdue-result reminder). */
+  initialGame?: Game;
 }
 
 /** Technical text for admins: message plus Postgres/PostgREST code, details and hint. */
@@ -85,13 +96,7 @@ interface ResultPreview {
   warnings: string[];
 }
 
-const defaultRoundDate = (status: { server_ist_date: string; server_ist_time: string; close_result_next_day: boolean; close_result_at: string } | undefined) => {
-  if (!status) return '';
-  if (!status.close_result_next_day || status.server_ist_time >= status.close_result_at) return status.server_ist_date;
-  const previousDate = new Date(`${status.server_ist_date}T00:00:00Z`);
-  previousDate.setUTCDate(previousDate.getUTCDate() - 1);
-  return previousDate.toISOString().slice(0, 10);
-};
+const defaultRoundDate = currentResultRound;
 
 const SETTING_LABELS: Record<string, string> = {
   merchant_upi_id: 'UPI ID',
@@ -160,12 +165,12 @@ function ResultPreviewCard({ preview, loading, error }: {
   error: string;
 }) {
   const { formatNumber } = useFormat();
-  if (loading) return <p className="text-xs text-slate-400">Calculating read-only payout preview…</p>;
+  if (loading) return <p className="text-xs text-ink-muted">Calculating read-only payout preview…</p>;
   if (error) return <p role="alert" className="text-xs text-rose-300">{error}</p>;
   if (!preview) return null;
-  return <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-xs">
+  return <div className="space-y-2 rounded-lg border border-surface-strong bg-surface-page/60 p-3 text-xs">
     <p className="font-medium text-slate-200">Preview for patti {preview.patti} · digit {preview.digit ?? '—'}{preview.jodi ? ` · jodi ${preview.jodi}` : ''}</p>
-    <div className="space-y-1">{preview.winning_by_bet_type.map((item) => <p key={item.bet_type} className="flex justify-between gap-2 text-slate-400">
+    <div className="space-y-1">{preview.winning_by_bet_type.map((item) => <p key={item.bet_type} className="flex justify-between gap-2 text-ink-muted">
       <span>{BET_TYPES[item.bet_type].label} · {item.winning_number ?? '—'} · {item.winning_picks} winning picks</span>
       <span className="text-amber-300">{formatNumber(item.total_payout)} payout</span>
     </p>)}</div>
@@ -173,14 +178,35 @@ function ResultPreviewCard({ preview, loading, error }: {
   </div>;
 }
 
-type Tab = 'results' | 'requests' | 'users' | 'selections' | 'stats' | 'settings' | 'support' | 'reports';
+type Tab = AdminTab;
 
-export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelProps) {
+/** The four top-level groups. "More" holds the less frequent screens. */
+const GROUPS = [
+  { id: 'requests', label: 'Requests', icon: Wallet },
+  { id: 'results', label: 'Results', icon: Trophy },
+  { id: 'users', label: 'Users', icon: Users },
+  { id: 'more', label: 'More', icon: MoreHorizontal },
+] as const;
+type Group = typeof GROUPS[number]['id'];
+
+const MORE_TABS: Array<{ id: Tab; label: string; icon: typeof BarChart3 }> = [
+  { id: 'stats', label: 'Overview', icon: BarChart3 },
+  { id: 'selections', label: 'Bets', icon: ListChecks },
+  { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'support', label: 'Support', icon: LifeBuoy },
+  { id: 'settings', label: 'Settings', icon: Settings },
+];
+
+const groupOf = (tab: Tab): Group => (tab === 'requests' || tab === 'results' || tab === 'users' ? tab : 'more');
+
+export default function AdminPanel({ onBack, initialTab = 'requests', initialGame }: AdminPanelProps) {
+  const alerts = useAdminAlerts();
+  const alertsVersion = alerts?.version ?? 0;
   const { formatNumber } = useFormat();
   const { statuses: gameStatuses, refresh: refreshGameStatuses } = useGameStatus();
   const gameOptions = gameStatuses.map((status) => ({ game: status.game, label: status.label || GAME_LABELS[status.game] || status.game }));
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [game, setGame] = useState<Game>('test');
+  const [game, setGame] = useState<Game>(initialGame ?? 'test');
   const [roundDate, setRoundDate] = useState('');
   const [openPatti, setOpenPatti] = useState('');
   const [openDigit, setOpenDigit] = useState('');
@@ -473,6 +499,14 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
 
   useEffect(() => { void loadWithdrawals(); }, [loadWithdrawals]);
 
+  // A request was added or changed (live update): reload the lists and counts.
+  const firstAlertsVersion = useRef(alertsVersion);
+  useEffect(() => {
+    if (alertsVersion === firstAlertsVersion.current) return;
+    void loadWithdrawals();
+    void loadStats();
+  }, [alertsVersion, loadWithdrawals, loadStats]);
+
   useEffect(() => {
     if (tab === 'results') loadExposure(game, roundDate);
   }, [tab, game, roundDate]);
@@ -556,7 +590,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
     try {
       const { error } = await supabase.rpc('admin_process_withdrawal', { p_withdrawal_id: id, p_new_status: status, p_reason: reason ?? null });
       if (error) throw error;
-      await loadWithdrawals(); await loadStats();
+      await loadWithdrawals(); await loadStats(); void alerts?.refresh();
     } catch (err) { setMessage(errorNotice(err)); }
     finally { setProcessingId(null); }
   };
@@ -566,7 +600,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
     try {
       const { error } = await supabase.rpc('admin_process_add_funds', { p_request_id: id, p_new_status: status, p_reason: reason ?? null });
       if (error) throw error;
-      await loadWithdrawals(); await loadStats();
+      await loadWithdrawals(); await loadStats(); void alerts?.refresh();
     } catch (err) { setMessage(errorNotice(err)); }
     finally { setProcessingId(null); }
   };
@@ -647,58 +681,116 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
   const pending = withdrawals.filter((w) => w.status === 'pending');
   const pendingAddFunds = addFundsReqs.filter((a) => a.status === 'pending');
 
-  const tabs: { id: Tab; label: string; icon: typeof BarChart3; badge?: number }[] = [
-    { id: 'stats', label: 'Overview', icon: BarChart3 },
-    { id: 'results', label: 'Results', icon: Trophy },
-    { id: 'requests', label: 'Requests', icon: Wallet, badge: pending.length + pendingAddFunds.length },
-    { id: 'users', label: 'Users', icon: Users },
-    { id: 'selections', label: 'Selections', icon: ListChecks },
-    { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'support', label: 'Support', icon: Users },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
-  ];
+  const waitingCount = alerts ? alerts.waiting : pending.length + pendingAddFunds.length;
+  const activeGroup = groupOf(tab);
+  const selectTab = (next: Tab) => { setTab(next); setMessage(null); };
+  const selectedStatus = gameStatuses.find((status) => status.game === game);
+  const fieldClass = 'min-h-tap w-full rounded-control border border-surface-strong bg-surface-raised px-4 text-base text-ink-strong focus:border-brand-400 focus:outline-none';
+  const digitClass = 'min-h-tap w-full rounded-control border border-surface-strong bg-surface-raised px-4 text-center font-mono text-2xl tracking-[0.3em] text-ink-strong focus:border-brand-400 focus:outline-none';
+
+  const resultForm = (phase: 'open' | 'close') => {
+    const patti = phase === 'open' ? openPatti : closePatti;
+    const digit = phase === 'open' ? openDigit : closeDigit;
+    const setPatti = phase === 'open' ? setOpenPatti : setClosePatti;
+    const setDigit = phase === 'open' ? setOpenDigit : setCloseDigit;
+    const preview = phase === 'open' ? openPreview : closePreview;
+    const resultTime = phase === 'open' ? selectedStatus?.open_result_at : selectedStatus?.close_result_at;
+    const ready = isValidPatti(patti) && /^[0-9]$/.test(digit) && Number(digit) === pattiDigit(patti) && !!roundDate;
+    return (
+      <Card>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h3 className="font-bold text-ink-strong">Post {phase} result</h3>
+          {resultTime && <span className="text-xs text-ink-muted">Due {formatClockTime(resultTime)} IST</span>}
+        </div>
+        <div className="grid grid-cols-[2fr_1fr] gap-3">
+          <label className="text-sm text-ink-muted">{phase === 'open' ? 'Open' : 'Close'} patti
+            <input type="text" inputMode="numeric" value={patti} onChange={(e) => setPatti(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder={phase === 'open' ? '123' : '135'} maxLength={3} className={`mt-1 ${digitClass}`} />
+          </label>
+          <label className="text-sm text-ink-muted">Digit
+            <input type="text" inputMode="numeric" value={digit} onChange={(e) => setDigit(e.target.value.replace(/\D/g, '').slice(0, 1))} placeholder="0" maxLength={1} className={`mt-1 ${digitClass}`} />
+          </label>
+        </div>
+        {patti && (
+          <p className={`mt-2 text-sm ${isValidPatti(patti) && (!digit || Number(digit) === pattiDigit(patti)) ? 'text-ink-muted' : 'text-rose-300'}`}>
+            {isValidPatti(patti) ? `Patti digit: ${pattiDigit(patti)}${digit && Number(digit) !== pattiDigit(patti) ? ' — entered digit does not match' : ''}` : 'Invalid patti'}
+          </p>
+        )}
+        <div className="mt-3"><ResultPreviewCard {...preview} /></div>
+        <Button
+          size="lg"
+          fullWidth
+          className="mt-4"
+          loading={posting}
+          disabled={!ready}
+          icon={<Trophy className="h-4 w-4" aria-hidden="true" />}
+          onClick={() => { setConfirmPhase(phase); setConfirmPatti(''); }}
+        >
+          Review {phase} payouts
+        </Button>
+      </Card>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none" />
+    <div className="min-h-screen bg-surface-page text-ink">
+      <PageHeader
+        title="Admin Panel"
+        subtitle={alerts?.live ? 'Live updates on' : 'Updates every minute'}
+        onBack={onBack}
+        actions={<HelpButton />}
+      />
 
-      <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-20">
-        <div className="max-w-2xl mx-auto px-5 py-3.5 flex items-center gap-3">
-          <button onClick={onBack} className="tap-target text-slate-400 hover:text-white transition-colors p-1" aria-label="Back">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h2 className="font-bold text-white leading-tight">Admin Panel</h2>
-            <p className="text-xs text-slate-400 leading-tight">Full control center</p>
-          </div>
-          <div className="ml-auto"><HelpButton /></div>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-5 py-6 space-y-6 relative z-10">
-        {/* Tab bar */}
-        <div className="flex gap-1 border border-slate-800 rounded-2xl bg-slate-900/80 p-1 overflow-x-auto">
-          {tabs.map((t) => {
-            const Icon = t.icon;
+      <nav aria-label="Admin sections" className="border-b border-surface-border bg-surface-page">
+        <div className="mx-auto grid max-w-2xl grid-cols-4 gap-1 px-2 py-2 sm:px-5">
+          {GROUPS.map((group) => {
+            const Icon = group.icon;
+            const active = activeGroup === group.id;
+            const badge = group.id === 'requests' ? waitingCount : 0;
             return (
               <button
-                key={t.id}
-                onClick={() => { setTab(t.id); setMessage(null); }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
-                  tab === t.id ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800'
+                key={group.id}
+                type="button"
+                aria-current={active ? 'page' : undefined}
+                onClick={() => selectTab(group.id === 'more' ? (activeGroup === 'more' ? tab : 'stats') : group.id)}
+                className={`relative flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-control text-sm font-semibold transition-colors ${
+                  active ? 'bg-surface-raised text-ink-strong' : 'text-ink-muted hover:bg-surface hover:text-ink-soft'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
-                {t.label}
-                {t.badge ? (
-                  <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${tab === t.id ? 'bg-emerald-500 text-white' : 'bg-amber-950 text-amber-400'}`}>
-                    {t.badge}
+                <Icon className="h-5 w-5" aria-hidden="true" />
+                {group.label}
+                {badge > 0 && (
+                  <span className="absolute right-1 top-1 min-w-[20px] rounded-full bg-amber-500 px-1.5 text-xs font-bold leading-5 text-slate-950">
+                    {badge}<span className="sr-only"> waiting</span>
                   </span>
-                ) : null}
+                )}
               </button>
             );
           })}
         </div>
+      </nav>
+
+      <main className="mx-auto max-w-2xl space-y-6 px-4 py-6 sm:px-5">
+        {activeGroup === 'more' && (
+          <div className="flex flex-wrap gap-2" aria-label="More admin screens">
+            {MORE_TABS.map((item) => {
+              const Icon = item.icon;
+              const active = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => selectTab(item.id)}
+                  className={`inline-flex min-h-tap items-center gap-1.5 rounded-full border px-4 text-sm font-medium ${
+                    active ? 'border-brand-600 bg-brand-950 text-brand-200' : 'border-surface-strong text-ink-soft hover:bg-surface-raised'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" aria-hidden="true" /> {item.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Stats tab */}
         {tab === 'stats' && (
@@ -714,146 +806,92 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
         {/* Results tab */}
         {tab === 'results' && (
           <section className="space-y-4 animate-fade-in">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1.5">Game</label>
-              <select
-                value={game}
-                onChange={(e) => {
-                  const nextGame = e.target.value as Game;
-                  setGame(nextGame);
-                  setRoundDate(defaultRoundDate(gameStatuses.find((status) => status.game === nextGame)));
-                }}
-                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none"
-              >
-                {gameStatuses.map((status) => (
-                  <option key={status.game} value={status.game}>{status.label || GAME_LABELS[status.game] || status.game}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1.5">Round date</label>
-              <input
-                type="date"
-                value={roundDate}
-                onChange={(e) => setRoundDate(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none"
-              />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-sm text-ink-muted">Game
+                <select
+                  value={game}
+                  onChange={(e) => {
+                    const nextGame = e.target.value as Game;
+                    setGame(nextGame);
+                    setRoundDate(defaultRoundDate(gameStatuses.find((status) => status.game === nextGame)));
+                  }}
+                  className={`mt-1 ${fieldClass}`}
+                >
+                  {gameStatuses.map((status) => (
+                    <option key={status.game} value={status.game}>{status.label || GAME_LABELS[status.game] || status.game}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm text-ink-muted">Round date
+                <input type="date" value={roundDate} onChange={(e) => setRoundDate(e.target.value)} className={`mt-1 ${fieldClass}`} />
+              </label>
             </div>
 
             {latestResult && (
-              <div className="border border-slate-800 rounded-2xl bg-slate-900/80 p-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">
-                    {latestResult.round_date === gameStatuses.find((status) => status.game === game)?.server_ist_date
-                      ? `Today's result — ${latestResult.round_date}`
-                      : `Latest result — ${latestResult.round_date}`}
-                  </p>
-                </div>
-                <div className="flex items-center justify-center gap-2 sm:gap-4 py-3">
-                  {latestResult.open_patti && <span className="text-sm font-bold text-slate-400">{latestResult.open_patti}</span>}
-                  {latestResult.open_digit && <span className="text-3xl font-bold text-emerald-400">{latestResult.open_digit}</span>}
-                  {latestResult.close_digit && <span className="text-3xl font-bold text-cyan-400">{latestResult.close_digit}</span>}
-                  {latestResult.close_patti && <span className="text-sm font-bold text-slate-400">{latestResult.close_patti}</span>}
-                  {!latestResult.open_digit && !latestResult.close_digit && <span className="text-sm text-slate-400">No results yet</span>}
+              <Card>
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                  <Trophy className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
+                  {latestResult.round_date === selectedStatus?.server_ist_date ? `Today's result — ${latestResult.round_date}` : `Latest result — ${latestResult.round_date}`}
+                </p>
+                <div className="flex items-center justify-center gap-3 py-3 sm:gap-4">
+                  {latestResult.open_patti && <span className="text-base font-bold text-ink-muted">{latestResult.open_patti}</span>}
+                  {latestResult.open_digit && <span className="text-3xl font-bold text-brand-400">{latestResult.open_digit}</span>}
+                  {latestResult.close_digit && <span className="text-3xl font-bold text-accent-400">{latestResult.close_digit}</span>}
+                  {latestResult.close_patti && <span className="text-base font-bold text-ink-muted">{latestResult.close_patti}</span>}
+                  {!latestResult.open_digit && !latestResult.close_digit && <span className="text-sm text-ink-muted">No results yet</span>}
                 </div>
                 <div className="flex justify-center gap-3">
-                  {latestResult.open_digit && <span className={`text-xs px-2 py-0.5 rounded-full ${latestResult.open_processed ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'}`}>Open {latestResult.open_processed ? 'paid' : 'pending'}</span>}
-                  {latestResult.close_digit && <span className={`text-xs px-2 py-0.5 rounded-full ${latestResult.close_processed ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'}`}>Close {latestResult.close_processed ? 'paid' : 'pending'}</span>}
+                  {latestResult.open_digit && <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${latestResult.open_processed ? 'bg-brand-950 text-brand-300' : 'bg-amber-950 text-amber-300'}`}>Open {latestResult.open_processed ? 'paid' : 'pending'}</span>}
+                  {latestResult.close_digit && <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${latestResult.close_processed ? 'bg-brand-950 text-brand-300' : 'bg-amber-950 text-amber-300'}`}>Close {latestResult.close_processed ? 'paid' : 'pending'}</span>}
                 </div>
-              </div>
+              </Card>
             )}
 
-            <div className="border border-amber-900/70 rounded-2xl bg-amber-950/20 p-4 space-y-3">
+            <section className="space-y-3 rounded-card border border-amber-900/70 bg-amber-950/20 p-5">
               <div>
-                <h3 className="text-xs font-medium text-amber-300 uppercase tracking-wide">Round Exposure — {roundDate}</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Per-user cap: {exposure ? formatNumber(exposure.max_user_round_points) : '—'} balance
-                  <span className="mx-2 text-slate-400">·</span>
-                  Per-number payout cap: {exposure ? formatNumber(exposure.max_number_liability) : '—'} balance
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-300">Round exposure — {roundDate}</h3>
+                <p className="mt-1 text-xs text-ink-muted">
+                  Per-user cap: {exposure ? `₹${formatNumber(exposure.max_user_round_points)}` : '—'}
+                  <span className="mx-2">·</span>
+                  Per-number payout cap: {exposure ? `₹${formatNumber(exposure.max_number_liability)}` : '—'}
                 </p>
               </div>
               {loadingExposure ? (
-                <div className="flex items-center justify-center py-4 text-slate-400"><Loader2 className="w-4 h-4 animate-spin" /></div>
+                <div className="flex items-center justify-center py-4 text-ink-muted"><Loader2 className="h-4 w-4 animate-spin" /></div>
               ) : exposureError ? (
-                <div className="text-sm text-rose-400">
-                  <p>{exposureError}</p>
-                  {exposureErrorDetails && <p className="mt-1 text-xs text-rose-400/70">{exposureErrorDetails}</p>}
-                </div>
-              ) : exposure ? (
+                <Alert details={exposureErrorDetails}>{exposureError}</Alert>
+              ) : exposure && exposure.exposure.length > 0 ? (
                 <div className="space-y-3">
-                  <p className="text-xs text-amber-200">
-                    Combined worst-case payout (reporting only): Open {formatNumber(exposure.phase_exposure.open_worst_case)} · Close {formatNumber(exposure.phase_exposure.close_worst_case)}
+                  <p className="text-sm text-amber-200">
+                    Worst-case payout: open ₹{formatNumber(exposure.phase_exposure.open_worst_case)} · close ₹{formatNumber(exposure.phase_exposure.close_worst_case)}
                   </p>
                   {Array.from(new Set(exposure.exposure.map((item) => item.bet_type))).map((betType) => (
                     <div key={betType}>
-                      <h4 className="text-xs font-medium text-slate-300 mb-1.5">{BET_TYPES[betType].label} — {formatNumber(exposure.stake_totals?.find((item) => item.bet_type === betType)?.total_stake ?? 0)} total staked · top numbers by potential payout</h4>
+                      <h4 className="mb-1.5 text-sm font-medium text-ink-soft">{BET_TYPES[betType].label} · ₹{formatNumber(exposure.stake_totals?.find((item) => item.bet_type === betType)?.total_stake ?? 0)} staked</h4>
                       <div className="space-y-1">
                         {exposure.exposure.filter((item) => item.bet_type === betType).map((item) => (
-                          <div key={`${item.bet_type}-${item.number}`} className="flex items-center justify-between text-xs">
-                            <span className="text-slate-400">{item.number} <span className="text-slate-400">({formatNumber(item.total_stake)} staked)</span></span>
-                            <span className="font-semibold text-amber-300">{formatNumber(item.potential_payout)} balance</span>
+                          <div key={`${item.bet_type}-${item.number}`} className="flex items-center justify-between text-sm">
+                            <span className="text-ink-muted"><span className="font-mono text-ink-soft">{item.number}</span> (₹{formatNumber(item.total_stake)} staked)</span>
+                            <span className="font-semibold text-amber-300">₹{formatNumber(item.potential_payout)}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   ))}
-                  {exposure.exposure.length === 0 && <p className="text-sm text-slate-400">No bets have been placed for this round.</p>}
                 </div>
               ) : (
-                <p className="text-sm text-slate-400">No bets have been placed for this round.</p>
+                <p className="text-sm text-ink-muted">No bets have been placed for this round.</p>
               )}
-            </div>
+            </section>
 
-            {/* Post Open Result */}
-            <div className="border border-slate-800 rounded-2xl bg-slate-900/80 p-5">
-              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Post Open Result</h3>
-              <div className="mb-4">
-                <label className="block text-xs text-slate-400 mb-1.5">Open Patti</label>
-                <input type="text" value={openPatti} onChange={(e) => setOpenPatti(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="e.g. 123" maxLength={3}
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none" />
-                <label className="block text-xs text-slate-400 mt-3 mb-1.5">Open Digit</label>
-                <input type="text" inputMode="numeric" value={openDigit} onChange={(e) => setOpenDigit(e.target.value.replace(/\D/g, '').slice(0, 1))} placeholder="0-9" maxLength={1}
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none" />
-                {openPatti && <p className="text-xs text-slate-400 mt-2">{isValidPatti(openPatti) ? `Patti digit: ${pattiDigit(openPatti)}${openDigit && Number(openDigit) !== pattiDigit(openPatti) ? ' — entered digit does not match' : ''}` : 'Invalid patti'}</p>}
-                  <ResultPreviewCard {...openPreview} />
-                </div>
-                <button onClick={() => { setConfirmPhase('open'); setConfirmPatti(''); }} disabled={posting || !isValidPatti(openPatti) || !/^[0-9]$/.test(openDigit) || Number(openDigit) !== pattiDigit(openPatti) || !roundDate}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
-                  {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Trophy className="w-4 h-4" /> Review Open Payouts</>}
-              </button>
-            </div>
+            {resultForm('open')}
+            {resultForm('close')}
 
-            {/* Post Close Result */}
-            <div className="border border-slate-800 rounded-2xl bg-slate-900/80 p-5">
-              <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Post Close Result</h3>
-              <div className="mb-4">
-                <label className="block text-xs text-slate-400 mb-1.5">Close Patti</label>
-                <input type="text" value={closePatti} onChange={(e) => setClosePatti(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="e.g. 135" maxLength={3}
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none" />
-                <label className="block text-xs text-slate-400 mt-3 mb-1.5">Close Digit</label>
-                <input type="text" inputMode="numeric" value={closeDigit} onChange={(e) => setCloseDigit(e.target.value.replace(/\D/g, '').slice(0, 1))} placeholder="0-9" maxLength={1}
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:border-cyan-400 focus:ring-0 focus:outline-none" />
-                {closePatti && <p className="text-xs text-slate-400 mt-2">{isValidPatti(closePatti) ? `Patti digit: ${pattiDigit(closePatti)}${closeDigit && Number(closeDigit) !== pattiDigit(closePatti) ? ' — entered digit does not match' : ''}` : 'Invalid patti'}</p>}
-                <ResultPreviewCard {...closePreview} />
-              </div>
-              <button onClick={() => { setConfirmPhase('close'); setConfirmPatti(''); }} disabled={posting || !isValidPatti(closePatti) || !/^[0-9]$/.test(closeDigit) || Number(closeDigit) !== pattiDigit(closePatti) || !roundDate}
-                className="w-full py-2.5 rounded-xl bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-500 disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
-                {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Trophy className="w-4 h-4" /> Review Close Payouts</>}
-              </button>
-            </div>
-
-            {message && (
-              <div className={`text-sm ${message.kind === 'ok' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                <p>{message.text}</p>
-                {message.raw && <p className="mt-1 text-xs text-rose-400/70">{message.raw}</p>}
-              </div>
-            )}
+            {message && <Alert tone={message.kind === 'ok' ? 'success' : 'error'} details={message.raw}>{message.text}</Alert>}
             {payoutResult && payoutResult.status === 'processed' && (
-              <div className="border border-emerald-900 bg-emerald-950/30 rounded-xl p-4 text-sm">
-                <p className="font-medium text-emerald-400">{payoutResult.phase === 'open' ? 'Open' : 'Close'} payouts processed</p>
-                <p className="text-emerald-500 mt-1"><span className="font-bold">{payoutResult.winners}</span> winner(s), <span className="font-bold">{payoutResult.total_paid}</span> balance paid out.</p>
-              </div>
+              <Alert tone="success" title={`${payoutResult.phase === 'open' ? 'Open' : 'Close'} payouts processed`}>
+                {payoutResult.winners} winner(s), ₹{formatNumber(payoutResult.total_paid)} paid out.
+              </Alert>
             )}
           </section>
         )}
@@ -895,6 +933,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
               void handleAddFunds(id, status, reason);
             }}
             onViewScreenshot={(path) => { void viewScreenshot(path); }}
+            onScreenshotSeen={(path) => setOpenedScreenshots((current) => (current.has(path) ? current : new Set(current).add(path)))}
             onLoadMore={(kind) => { void loadMoreRequests(kind); }}
           />
         )}
@@ -967,7 +1006,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
       </main>
 
       {tab === 'users' && detailUser && (
-        <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-950 p-5">
+        <div className="fixed inset-0 z-40 overflow-y-auto bg-surface-page p-5">
           <div className="mx-auto max-w-2xl py-4">
             <UserDetail userId={detailUser.id} onBack={() => setDetailUser(null)} />
           </div>
@@ -976,7 +1015,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
 
       {confirmPhase && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onClick={() => !posting && setConfirmPhase(null)}>
-          <section ref={resultConfirmRef} role="dialog" aria-modal="true" aria-labelledby="result-confirm-title" className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5" onClick={(event) => event.stopPropagation()}>
+          <section ref={resultConfirmRef} role="dialog" aria-modal="true" aria-labelledby="result-confirm-title" className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-card border border-surface-strong bg-surface p-5" onClick={(event) => event.stopPropagation()}>
             <header>
               <h3 id="result-confirm-title" className="text-lg font-bold">Confirm {confirmPhase} result</h3>
               <p className="mt-1 text-sm text-rose-300">Posting pays winning picks immediately. Payouts cannot be undone.</p>
@@ -984,25 +1023,31 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
             <ResultPreviewCard {...(confirmPhase === 'open' ? openPreview : closePreview)} />
             <div className="rounded-lg border border-amber-900/70 bg-amber-950/20 p-3">
               <p className="mb-2 text-xs font-medium text-amber-200">Round exposure · {roundDate}</p>
-              {loadingExposure ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : exposureError ? (
+              {loadingExposure ? <Loader2 className="h-4 w-4 animate-spin text-ink-muted" /> : exposureError ? (
                 <p role="alert" className="text-xs text-rose-300">{exposureError}{exposureErrorDetails && ` ${exposureErrorDetails}`}</p>
               ) : exposure?.exposure.length ? exposure.exposure.map((item) => (
-                <p key={`${item.bet_type}-${item.number}`} className="flex justify-between gap-2 py-0.5 text-xs text-slate-300">
+                <p key={`${item.bet_type}-${item.number}`} className="flex justify-between gap-2 py-0.5 text-xs text-ink-soft">
                   <span>{BET_TYPES[item.bet_type].label} · {item.number} · stake {item.total_stake}</span>
                   <span>{item.potential_payout} potential payout</span>
                 </p>
-              )) : <p className="text-xs text-slate-400">No exposed picks.</p>}
+              )) : <p className="text-xs text-ink-muted">No exposed picks.</p>}
             </div>
-            <label className="block text-xs text-slate-300">
+            <label className="block text-sm text-ink-soft">
               Type <strong>{confirmPhase === 'open' ? openPatti : closePatti}</strong> to confirm
-              <input value={confirmPatti} onChange={(event) => setConfirmPatti(event.target.value)} autoComplete="off" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm text-white" />
+              <input value={confirmPatti} inputMode="numeric" onChange={(event) => setConfirmPatti(event.target.value)} autoComplete="off" className="mt-1 min-h-tap w-full rounded-control border border-surface-strong bg-surface-raised px-4 font-mono text-lg text-ink-strong" />
             </label>
-            {message?.kind === 'err' && <p role="alert" className="text-xs text-rose-300">{message.text}{message.raw && ` ${message.raw}`}</p>}
-            <div className="flex gap-2">
-              <button type="button" disabled={posting} onClick={() => setConfirmPhase(null)} className="flex-1 rounded-lg border border-slate-700 py-2.5 text-sm text-slate-300">Back</button>
-              <button type="button" disabled={posting || confirmPatti !== (confirmPhase === 'open' ? openPatti : closePatti) || (confirmPhase === 'open' ? openPreview.loading || !openPreview.preview || openPreview.preview.patti !== openPatti || openPreview.preview.warnings.length > 0 : closePreview.loading || !closePreview.preview || closePreview.preview.patti !== closePatti || closePreview.preview.warnings.length > 0)} onClick={() => void (confirmPhase === 'open' ? handlePostOpen() : handlePostClose())} className="flex-1 rounded-lg bg-rose-700 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
-                {posting ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Post and pay'}
-              </button>
+            {message?.kind === 'err' && <Alert details={message.raw}>{message.text}</Alert>}
+            <div className="grid grid-cols-2 gap-4">
+              <Button size="lg" variant="secondary" disabled={posting} onClick={() => setConfirmPhase(null)}>Back</Button>
+              <Button
+                size="lg"
+                variant="danger"
+                loading={posting}
+                disabled={confirmPatti !== (confirmPhase === 'open' ? openPatti : closePatti) || (confirmPhase === 'open' ? openPreview.loading || !openPreview.preview || openPreview.preview.patti !== openPatti || openPreview.preview.warnings.length > 0 : closePreview.loading || !closePreview.preview || closePreview.preview.patti !== closePatti || closePreview.preview.warnings.length > 0)}
+                onClick={() => void (confirmPhase === 'open' ? handlePostOpen() : handlePostClose())}
+              >
+                Post and pay
+              </Button>
             </div>
           </section>
         </div>
@@ -1010,35 +1055,35 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
 
       {/* Adjust balance modal */}
       {adjustTarget && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={() => !adjusting && setAdjustTarget(null)}>
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 w-full max-w-sm p-6 space-y-4 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-surface-page/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4" onClick={() => !adjusting && setAdjustTarget(null)}>
+          <div className="bg-surface rounded-card border border-surface-border w-full max-w-sm p-6 space-y-4 animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white">Adjust {adjustTarget.type === 'points' ? 'play balance' : 'wallet balance'}</h3>
-              <button onClick={() => !adjusting && setAdjustTarget(null)} className="tap-target text-slate-400 hover:text-white">
+              <h3 className="font-bold text-ink-strong">Adjust {adjustTarget.type === 'points' ? 'play balance' : 'wallet balance'}</h3>
+              <button onClick={() => !adjusting && setAdjustTarget(null)} className="tap-target text-ink-muted hover:text-ink-strong">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-slate-800 border border-slate-700">
-              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-semibold text-slate-300">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-surface-raised border border-surface-strong">
+              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-semibold text-ink-soft">
                 {adjustTarget.user.display_name.charAt(0).toUpperCase() || '?'}
               </div>
               <div>
-                <p className="text-sm font-medium text-white">{adjustTarget.user.display_name || 'Unnamed'}</p>
-                <p className="text-xs text-slate-400">Current balance: {adjustTarget.type === 'points' ? adjustTarget.user.points : adjustTarget.user.wallet}</p>
+                <p className="text-sm font-medium text-ink-strong">{adjustTarget.user.display_name || 'Unnamed'}</p>
+                <p className="text-xs text-ink-muted">Current balance: {adjustTarget.type === 'points' ? adjustTarget.user.points : adjustTarget.user.wallet}</p>
               </div>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">Balance adjustment (use negative to deduct)</label>
+              <label className="block text-xs text-ink-muted mb-1.5">Balance adjustment (use negative to deduct)</label>
               <input type="number" step={1} value={adjustDelta} onChange={(e) => setAdjustDelta(e.target.value)} placeholder="e.g. 500 or -200"
-                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none" />
+                className="w-full px-4 py-3 rounded-control bg-surface-raised border border-surface-strong text-ink-strong text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none" />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1.5">Reason</label>
+              <label className="block text-xs text-ink-muted mb-1.5">Reason</label>
               <input type="text" value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder="e.g. Bonus credit / correction"
-                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none" />
+                className="w-full px-4 py-3 rounded-control bg-surface-raised border border-surface-strong text-ink-strong text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none" />
             </div>
             <button onClick={handleAdjust} disabled={adjusting || pendingConfirm !== null}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-bold hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
+              className="w-full py-3.5 rounded-control bg-gradient-to-r from-emerald-500 to-cyan-500 text-ink-strong text-sm font-bold hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
               {adjusting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Review adjustment'}
             </button>
             {message && message.kind === 'err' && (
@@ -1062,15 +1107,15 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
 
       {/* Screenshot viewer modal */}
       {(screenshotUrl || screenshotLoading) && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { setScreenshotUrl(null); setScreenshotLoading(false); }}>
+        <div className="fixed inset-0 bg-surface-page/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { setScreenshotUrl(null); setScreenshotLoading(false); }}>
           <div className="relative max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => { setScreenshotUrl(null); setScreenshotLoading(false); }} className="tap-target absolute -top-10 right-0 text-slate-400 hover:text-white">
+            <button onClick={() => { setScreenshotUrl(null); setScreenshotLoading(false); }} className="tap-target absolute -top-10 right-0 text-ink-muted hover:text-ink-strong">
               <X className="w-6 h-6" />
             </button>
             {screenshotLoading ? (
-              <div className="flex items-center justify-center py-20 text-slate-400"><Loader2 className="w-8 h-8 animate-spin" /></div>
+              <div className="flex items-center justify-center py-20 text-ink-muted"><Loader2 className="w-8 h-8 animate-spin" /></div>
             ) : (
-              <img src={screenshotUrl!} alt="Payment screenshot" className="w-full rounded-xl border border-slate-700" />
+              <img src={screenshotUrl!} alt="Payment screenshot" className="w-full rounded-control border border-surface-strong" />
             )}
           </div>
         </div>

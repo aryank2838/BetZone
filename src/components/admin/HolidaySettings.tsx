@@ -11,7 +11,7 @@ interface HolidaySettingsProps {
   onChanged: () => void;
 }
 
-const inputClass = 'w-full min-w-0 px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none';
+const inputClass = 'w-full min-w-0 px-3 py-2.5 rounded-lg bg-surface-raised border border-surface-strong text-ink-strong text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none';
 
 function addDays(isoDate: string, days: number): string {
   const [year, month, day] = isoDate.split('-').map(Number);
@@ -58,32 +58,32 @@ function GameHolidayRow({ status, onChanged }: { status: GameStatus; onChanged: 
   };
 
   return (
-    <div className="rounded-xl border border-slate-800 p-4 space-y-3">
+    <div className="rounded-control border border-surface-border p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-white">{label}</p>
+        <p className="text-sm font-semibold text-ink-strong">{label}</p>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${onHoliday ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-400'}`}>
           {onHoliday && status.holiday_reopens_on ? `On holiday until ${formatHolidayDate(status.holiday_reopens_on)}` : 'Running normally'}
         </span>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label htmlFor={`${id}-date`} className="block text-xs text-slate-400 mb-1.5">Game restarts on (IST)</label>
+          <label htmlFor={`${id}-date`} className="block text-xs text-ink-muted mb-1.5">Game restarts on (IST)</label>
           <input id={`${id}-date`} type="date" min={tomorrow} value={reopensOn} onChange={(event) => setReopensOn(event.target.value)} className={inputClass} />
         </div>
         <div>
-          <label htmlFor={`${id}-note`} className="block text-xs text-slate-400 mb-1.5">Note for players (optional)</label>
+          <label htmlFor={`${id}-note`} className="block text-xs text-ink-muted mb-1.5">Note for players (optional)</label>
           <input id={`${id}-note`} type="text" maxLength={160} value={note} onChange={(event) => setNote(event.target.value)} placeholder="e.g. Diwali holiday" className={inputClass} />
         </div>
       </div>
-      <p className="text-xs text-slate-400">No bets are accepted until the restart date. On that date betting opens again by itself at the normal time.</p>
+      <p className="text-xs text-ink-muted">No bets are accepted until the restart date. On that date betting opens again by itself at the normal time.</p>
       <div className="flex flex-wrap gap-2">
         <button type="button" disabled={saving || !reopensOn} onClick={() => void save(reopensOn)}
-          className="tap-target px-4 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-500 disabled:opacity-40">
+          className="tap-target px-4 py-2.5 rounded-lg bg-amber-600 text-ink-strong text-sm font-medium hover:bg-amber-500 disabled:opacity-40">
           {onHoliday ? 'Update holiday' : 'Start holiday'}
         </button>
         {onHoliday && (
           <button type="button" disabled={saving} onClick={() => void save(null)}
-            className="tap-target px-4 py-2.5 rounded-lg border border-slate-700 text-slate-200 text-sm font-medium hover:bg-slate-800 disabled:opacity-40">
+            className="tap-target px-4 py-2.5 rounded-lg border border-surface-strong text-slate-200 text-sm font-medium hover:bg-surface-raised disabled:opacity-40">
             End holiday now
           </button>
         )}
@@ -103,13 +103,13 @@ function GameHolidayRow({ status, onChanged }: { status: GameStatus; onChanged: 
 
 export default function HolidaySettings({ statuses, onChanged }: HolidaySettingsProps) {
   return (
-    <section className="mt-4 border border-slate-800 rounded-2xl bg-slate-900/80 p-5 space-y-4 animate-fade-in">
+    <section className="mt-4 border border-surface-border rounded-card bg-surface/80 p-5 space-y-4 animate-fade-in">
       <div className="flex items-center gap-2">
         <CalendarOff className="w-4 h-4 text-amber-400" />
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Holidays</h3>
+        <h3 className="text-xs font-medium text-ink-muted uppercase tracking-wide">Holidays</h3>
       </div>
       {statuses.length === 0
-        ? <p className="text-sm text-slate-400">Loading games…</p>
+        ? <p className="text-sm text-ink-muted">Loading games…</p>
         : statuses.map((status) => (
           <GameHolidayRow key={`${status.game}-${status.holiday_reopens_on ?? 'none'}`} status={status} onChanged={onChanged} />
         ))}

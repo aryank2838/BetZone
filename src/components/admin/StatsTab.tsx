@@ -42,26 +42,26 @@ export default function StatsTab({ games, stats, loading, roundDate, onRoundDate
       </div>
 
       <div>
-        <label className="block text-xs text-slate-400 mb-1.5">Selection round date (IST)</label>
+        <label className="block text-xs text-ink-muted mb-1.5">Selection round date (IST)</label>
         <input
           type="date"
           value={roundDate}
           onChange={(event) => onRoundDateChange(event.target.value)}
-          className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none"
+          className="w-full px-4 py-3 rounded-control bg-surface-raised border border-surface-strong text-ink-strong text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none"
         />
       </div>
 
-      <div className="border border-slate-800 rounded-2xl bg-slate-900/80 p-4 space-y-3">
-        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Pending requests</h4>
+      <div className="border border-surface-border rounded-card bg-surface/80 p-4 space-y-3">
+        <h4 className="text-xs font-medium text-ink-muted uppercase tracking-wide">Pending requests</h4>
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-950/30 border border-amber-900">
+          <div className="flex items-center gap-3 p-3 rounded-control bg-amber-950/30 border border-amber-900">
             <Wallet className="w-4 h-4 text-amber-400" />
             <div>
               <p className="text-lg font-bold text-amber-300">{stats.pending_withdrawals_count}</p>
               <p className="text-xs text-amber-600">Withdrawals ({stats.pending_withdrawals_amount} balance)</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-cyan-950/30 border border-cyan-900">
+          <div className="flex items-center gap-3 p-3 rounded-control bg-cyan-950/30 border border-cyan-900">
             <Plus className="w-4 h-4 text-cyan-400" />
             <div>
               <p className="text-lg font-bold text-cyan-300">{stats.pending_addfunds_count}</p>
@@ -71,18 +71,18 @@ export default function StatsTab({ games, stats, loading, roundDate, onRoundDate
         </div>
       </div>
 
-      <div className="border border-slate-800 rounded-2xl bg-slate-900/80 p-4 space-y-3">
-        <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Selections by game and bet type · {stats.round_date}</h4>
+      <div className="border border-surface-border rounded-card bg-surface/80 p-4 space-y-3">
+        <h4 className="text-xs font-medium text-ink-muted uppercase tracking-wide">Selections by game and bet type · {stats.round_date}</h4>
         {games.map(({ game, label }) => (
           <div key={game} className="space-y-2">
-            <p className="text-xs font-medium text-slate-300">{label}</p>
+            <p className="text-xs font-medium text-ink-soft">{label}</p>
             <div className="grid grid-cols-2 gap-2">
               {(Object.keys(BET_TYPES) as BetType[]).map((betType) => (
-                <div key={betType} className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                  <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
+                <div key={betType} className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-raised/50 border border-surface-strong/50">
+                  <TrendingUp className="w-3.5 h-3.5 text-ink-muted" />
                   <div>
-                    <p className="text-sm font-semibold text-white">{stats.selection_counts?.[game]?.[betType] ?? 0}</p>
-                    <p className="text-xs text-slate-400">{BET_TYPES[betType].label}</p>
+                    <p className="text-sm font-semibold text-ink-strong">{stats.selection_counts?.[game]?.[betType] ?? 0}</p>
+                    <p className="text-xs text-ink-muted">{BET_TYPES[betType].label}</p>
                   </div>
                 </div>
               ))}
@@ -91,9 +91,9 @@ export default function StatsTab({ games, stats, loading, roundDate, onRoundDate
         ))}
       </div>
 
-      <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-800/50 border border-slate-700">
+      <div className="flex items-center gap-2 p-3 rounded-control bg-surface-raised/50 border border-surface-strong">
         <Shield className="w-4 h-4 text-amber-400" />
-        <p className="text-xs text-slate-400">{stats.admin_count} admin(s) on this platform.</p>
+        <p className="text-xs text-ink-muted">{stats.admin_count} admin(s) on this platform.</p>
       </div>
     </section>
   );
@@ -113,7 +113,7 @@ function StatCard({ icon: Icon, label, value, color }: {
     emerald: 'bg-emerald-950/40 text-emerald-400 border-emerald-900',
   }[color];
   return (
-    <div className={`border rounded-xl p-4 ${colors}`}>
+    <div className={`border rounded-control p-4 ${colors}`}>
       <Icon className="w-4 h-4 mb-2" />
       <p className="text-2xl font-bold">{formatNumber(value)}</p>
       <p className="text-xs opacity-70">{label}</p>

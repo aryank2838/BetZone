@@ -29,38 +29,38 @@ export default function ConfirmDialog({ content, busy, onConfirm, onCancel }: Co
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-md space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 text-slate-100"
+        className="w-full max-w-md space-y-4 rounded-card border border-surface-strong bg-surface p-5 text-ink"
         onClick={(event) => event.stopPropagation()}
       >
         <h3 id={titleId} className="text-lg font-bold">{content.title}</h3>
-        <dl className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-sm">
+        <dl className="space-y-1.5 rounded-lg border border-surface-border bg-surface-page/60 p-3 text-sm">
           {content.rows.map(([label, value]) => (
             <div key={label} className="flex justify-between gap-3">
-              <dt className="text-slate-400">{label}</dt>
-              <dd className="break-all text-right font-medium text-white">{value}</dd>
+              <dt className="text-ink-muted">{label}</dt>
+              <dd className="break-all text-right font-medium text-ink-strong">{value}</dd>
             </div>
           ))}
         </dl>
         {content.warning && <p className={`text-sm ${content.danger ? 'text-rose-300' : 'text-amber-200'}`}>{content.warning}</p>}
         {content.requiredText && (
-          <label className="block text-xs text-slate-300">
-            Type <strong className="text-white">{content.requiredText}</strong> to confirm
+          <label className="block text-xs text-ink-soft">
+            Type <strong className="text-ink-strong">{content.requiredText}</strong> to confirm
             <input
               value={typed}
               onChange={(event) => setTyped(event.target.value)}
               autoComplete="off"
               autoCapitalize="characters"
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm text-white"
+              className="mt-1 w-full rounded-lg border border-surface-strong bg-surface-raised p-3 text-sm text-ink-strong"
             />
           </label>
         )}
         <div className="flex gap-2">
-          <button type="button" onClick={cancel} disabled={busy} className="flex-1 rounded-lg border border-slate-700 py-2.5 text-sm text-slate-300">Cancel</button>
+          <button type="button" onClick={cancel} disabled={busy} className="flex-1 rounded-lg border border-surface-strong min-h-tap py-2.5 text-sm text-ink-soft">Cancel</button>
           <button
             type="button"
             onClick={onConfirm}
             disabled={busy || !typedOk}
-            className={`flex-1 rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-40 ${content.danger ? 'bg-rose-700 hover:bg-rose-600' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+            className={`flex-1 rounded-lg min-h-tap py-2.5 text-sm font-semibold text-ink-strong disabled:opacity-40 ${content.danger ? 'bg-rose-700 hover:bg-rose-600' : 'bg-emerald-600 hover:bg-emerald-500'}`}
           >
             {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : content.confirmLabel}
           </button>

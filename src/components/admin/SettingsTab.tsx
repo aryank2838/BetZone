@@ -28,8 +28,8 @@ interface SettingsTabProps {
   onSave: (key: string, value: string) => void;
 }
 
-const inputClass = 'flex-1 min-w-0 px-3 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none';
-const saveClass = 'tap-target px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500 disabled:opacity-40 transition-colors whitespace-nowrap';
+const inputClass = 'flex-1 min-w-0 px-3 py-2.5 rounded-lg bg-surface-raised border border-surface-strong text-ink-strong text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none';
+const saveClass = 'tap-target px-4 py-2.5 rounded-lg bg-emerald-600 text-ink-strong text-sm font-medium hover:bg-emerald-500 disabled:opacity-40 transition-colors whitespace-nowrap';
 
 function SettingField({ settingKey, label, value, help, meta, saving, onChange, onSave, inputProps }: {
   settingKey: string;
@@ -45,13 +45,13 @@ function SettingField({ settingKey, label, value, help, meta, saving, onChange, 
   const id = useId();
   return (
     <div>
-      <label htmlFor={id} className="block text-xs text-slate-400 mb-1.5">{label}</label>
+      <label htmlFor={id} className="block text-xs text-ink-muted mb-1.5">{label}</label>
       <div className="flex gap-2">
         <input id={id} type="text" value={value} onChange={(event) => onChange(event.target.value)} className={inputClass} {...inputProps} />
         <button type="button" onClick={() => onSave(settingKey, value)} disabled={saving} className={saveClass} aria-label={`Save ${label}`}>Save</button>
       </div>
-      {help && <p className="text-xs text-slate-400 mt-1.5">{help}</p>}
-      <p className="text-xs text-slate-400 mt-1" data-testid={`setting-meta-${settingKey}`}>{lastChangedText(meta[settingKey])}</p>
+      {help && <p className="text-xs text-ink-muted mt-1.5">{help}</p>}
+      <p className="text-xs text-ink-muted mt-1" data-testid={`setting-meta-${settingKey}`}>{lastChangedText(meta[settingKey])}</p>
     </div>
   );
 }
@@ -66,10 +66,10 @@ export default function SettingsTab(props: SettingsTabProps) {
 
   return (
     <section className="space-y-4 animate-fade-in">
-      <div className="border border-slate-800 rounded-2xl bg-slate-900/80 p-5 space-y-4">
+      <div className="border border-surface-border rounded-card bg-surface/80 p-5 space-y-4">
         <div className="flex items-center gap-2">
           <SettingsIcon className="w-4 h-4 text-amber-400" />
-          <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Payment Settings</h3>
+          <h3 className="text-xs font-medium text-ink-muted uppercase tracking-wide">Payment Settings</h3>
         </div>
         {loading ? (
           <ListSkeleton rows={3} />
@@ -87,8 +87,8 @@ export default function SettingsTab(props: SettingsTabProps) {
               inputProps={{ placeholder: '+919876543210', inputMode: 'tel' }} />
             <SettingField {...shared} settingKey="support_email" label="Support email" value={supportEmail} onChange={onSupportEmailChange}
               inputProps={{ type: 'email', placeholder: 'support@example.com' }} />
-            <div className="border-t border-slate-800 pt-4 space-y-4">
-              <h4 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Betting Exposure Limits</h4>
+            <div className="border-t border-surface-border pt-4 space-y-4">
+              <h4 className="text-xs font-medium text-ink-muted uppercase tracking-wide">Betting Exposure Limits</h4>
               <SettingField {...shared} settingKey="max_user_round_points" label="Maximum user stake per game round (balance)" value={maxUserRoundBalance}
                 onChange={onMaxUserRoundBalanceChange} help="Default: 50,000 balance across all bet types for the round."
                 inputProps={{ inputMode: 'numeric' }} />

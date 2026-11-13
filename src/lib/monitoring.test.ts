@@ -15,9 +15,9 @@ afterEach(() => {
 });
 
 describe('Sentry event scrubbing', () => {
-  it('redacts sensitive values while preserving exception stack frames', () => {
+  it('redacts sensitive values while preserving exception stack frames', async () => {
     vi.stubEnv('VITE_SENTRY_DSN', 'https://public@example.ingest.sentry.io/123');
-    initializeMonitoring();
+    await initializeMonitoring();
 
     const options = sentryMock.init.mock.calls[0][0];
     const event = {
@@ -73,9 +73,9 @@ describe('Sentry event scrubbing', () => {
     });
   });
 
-  it('scrubs exception message text but leaves the stack trace untouched', () => {
+  it('scrubs exception message text but leaves the stack trace untouched', async () => {
     vi.stubEnv('VITE_SENTRY_DSN', 'https://public@example.ingest.sentry.io/123');
-    initializeMonitoring();
+    await initializeMonitoring();
     const options = sentryMock.init.mock.calls[0][0];
     const stacktrace = {
       frames: [{ filename: 'https://app.example/assets/app.js', function: 'requestWithdrawal', lineno: 12, colno: 7 }],

@@ -5,16 +5,18 @@ import { supabase } from '@/lib/supabase';
 import type { Game, GameResult } from '@/types';
 import { useGameStatus } from '@/lib/useGameStatus';
 import { friendlyErrorDetails } from '@/lib/errors';
-import SelectionScreen from '@/components/SelectionScreen';
-import BalancePage from '@/components/BalancePage';
-import MyBetsPage from '@/components/MyBetsPage';
-import PlayLimitsPage from '@/components/PlayLimitsPage';
-import RulesPage from '@/components/RulesPage';
-import SettingsPage from '@/components/SettingsPage';
-import LegalPage from '@/components/LegalPage';
 import GameCard from '@/components/GameCard';
 import PlayLimitsSummary from '@/components/PlayLimitsSummary';
-import AdminHomeCard from '@/components/AdminHomeCard';
+// The sign-in and terms screens already include LegalPage, so it stays in the main bundle.
+import LegalPage from '@/components/LegalPage';
+import AdminHomeCard, { type AdminOpenTarget } from '@/components/AdminHomeCard';
+import AdminAlertsProvider from '@/lib/AdminAlertsProvider';
+import MoneyNotices from '@/components/MoneyNotices';
+import InstallBanner from '@/components/InstallBanner';
+import { useMoneyNotices, useNoticeText, type MoneyNotice } from '@/lib/useMoneyNotices';
+import { useToast } from '@/components/ui/toastContext';
+import type { AdminTab } from '@/components/AdminPanel';
+import type { MoneyTab } from '@/components/BalancePage';
 import BottomNav, { type TabView } from '@/components/BottomNav';
 import Alert from '@/components/ui/Alert';
 import { SectionTitle } from '@/components/ui/Card';
@@ -25,7 +27,23 @@ import { interpolate, useT } from '@/i18n/useT';
 import { useFormat } from '@/i18n/useFormat';
 import { ChevronRight, Loader2, Plus, User, Wallet, Zap } from 'lucide-react';
 
+// Pages other than Home load on first use, so the first screen downloads less.
 const AdminPanel = lazy(() => import('@/components/AdminPanel'));
+const SelectionScreen = lazy(() => import('@/components/SelectionScreen'));
+const BalancePage = lazy(() => import('@/components/BalancePage'));
+const MyBetsPage = lazy(() => import('@/components/MyBetsPage'));
+const PlayLimitsPage = lazy(() => import('@/components/PlayLimitsPage'));
+const RulesPage = lazy(() => import('@/components/RulesPage'));
+const SettingsPage = lazy(() => import('@/components/SettingsPage'));
+
+function PageLoading() {
+  const { t } = useT();
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center bg-surface-page text-ink-muted">
+      <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> {t('common.loading')}</div>
+    </div>
+  );
+}
 
 const TAB_FOR_VIEW: Partial<Record<NavView, TabView>> = {
   home: 'home',
@@ -36,12 +54,39 @@ const TAB_FOR_VIEW: Partial<Record<NavView, TabView>> = {
 };
 
 export default function Dashboard() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { profile } = useAuth();
   const { nav, navigate, goHome } = useNav();
-  const [adminInitialTab, setAdminInitialTab] = useState<'stats' | 'settings' | 'requests'>('stats');
+  const [adminTarget, setAdminTarget] = useState<{ tab: AdminTab; game?: Game }>({ tab: 'requests' });
+  const openAdmin = (tab: AdminTab, game?: Game) => {
+    setAdminTarget({ tab, game });
+    navigate({ view: 'admin', game: null });
+  };
+  const content = <DashboardContent nav={nav} navigate={navigate} goHome={goHome} adminTarget={adminTarget} openAdmin={openAdmin} />;
+  // Admins get live request alerts on every screen, not only on Home.
+  return profile?.is_admin
+    ? <AdminAlertsProvider onOpenRequests={() => openAdmin('requests')}>{content}</AdminAlertsProvider>
+    : content;
+}
+
+function DashboardContent({ nav, navigate, goHome, adminTarget, openAdmin }: {
+  nav: ReturnType<typeof useNav>['nav'];
+  navigate: ReturnType<typeof useNav>['navigate'];
+  goHome: () => void;
+  adminTarget: { tab: AdminTab; game?: Game };
+  openAdmin: (tab: AdminTab, game?: Game) => void;
+}) {
+  const { user, profile, refreshProfile } = useAuth();
   const { t } = useT();
+  const toast = useToast();
+  const noticeText = useNoticeText();
+  const [moneyTab, setMoneyTab] = useState<MoneyTab | null>(null);
+  const { notices, dismiss: dismissNotices } = useMoneyNotices((fresh: MoneyNotice[]) => {
+    // Live update while the app is open: a toast, plus the card on Home.
+    for (const notice of fresh.slice(0, 2)) toast.show(noticeText(notice), notice.status === 'approved' ? 'success' : 'info');
+  });
 
   const goTo = (view: NavView, game: Game | null = null) => {
+    setMoneyTab(null);
     navigate({ view, game });
     void refreshProfile();
   };
@@ -50,12 +95,14 @@ export default function Dashboard() {
   let page: ReactNode;
   if (nav.view === 'game' && nav.game && user) {
     return (
-      <SelectionScreen
-        game={nav.game}
-        onBack={() => goHome()}
-        onPointsChanged={refreshProfile}
-        onAddFunds={() => goTo('balance')}
-      />
+      <Suspense fallback={<PageLoading />}>
+        <SelectionScreen
+          game={nav.game}
+          onBack={() => goHome()}
+          onPointsChanged={refreshProfile}
+          onAddFunds={() => goTo('balance')}
+        />
+      </Suspense>
     );
   }
   if (nav.view === 'admin' && user && profile?.is_admin) {
@@ -65,12 +112,12 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> {t('common.loading')}</div>
         </div>
       }>
-        <AdminPanel onBack={() => { setAdminInitialTab('stats'); goHome(); }} initialTab={adminInitialTab} />
+        <AdminPanel onBack={() => goHome()} initialTab={adminTarget.tab} initialGame={adminTarget.game} />
       </Suspense>
     );
   }
-  if (nav.view === 'limits' && user) return <PlayLimitsPage onBack={backToAccount} />;
-  if (nav.view === 'rules') return <RulesPage onBack={backToAccount} />;
+  if (nav.view === 'limits' && user) return <Suspense fallback={<PageLoading />}><PlayLimitsPage onBack={backToAccount} /></Suspense>;
+  if (nav.view === 'rules') return <Suspense fallback={<PageLoading />}><RulesPage onBack={backToAccount} /></Suspense>;
   if (nav.view === 'terms' || nav.view === 'privacy' || nav.view === 'contact') {
     return <LegalPage document={nav.view} onBack={backToAccount} />;
   }
@@ -80,27 +127,42 @@ export default function Dashboard() {
   } else if ((nav.view === 'balance' || nav.view === 'wallet') && user) {
     page = (
       <BalancePage
-        initialTab={nav.view === 'wallet' ? 'withdraw' : 'add'}
+        key={moneyTab ?? nav.view}
+        initialTab={moneyTab ?? (nav.view === 'wallet' ? 'withdraw' : 'add')}
         onBalanceChanged={refreshProfile}
-        onOpenAdminSettings={profile?.is_admin ? () => { setAdminInitialTab('settings'); goTo('admin'); } : undefined}
+        onOpenAdminSettings={profile?.is_admin ? () => openAdmin('settings') : undefined}
       />
     );
   } else if (nav.view === 'settings' && user) {
     page = <SettingsPage onNavigate={(view) => goTo(view)} />;
   } else {
-    page = <Home onNavigate={goTo} onOpenAdmin={(tab) => { setAdminInitialTab(tab); goTo('admin'); }} />;
+    page = (
+      <Home
+        onNavigate={goTo}
+        onOpenAdmin={(target, game) => openAdmin(target, game)}
+        notices={notices}
+        onDismissNotices={() => { void dismissNotices(); }}
+        onOpenHistory={() => { setMoneyTab('history'); navigate({ view: 'balance', game: null }); }}
+      />
+    );
   }
 
   const activeTab = TAB_FOR_VIEW[nav.view] ?? 'home';
   return (
     <div className={`min-h-screen bg-surface-page ${WITH_BOTTOM_NAV}`}>
-      {page}
+      <Suspense fallback={<PageLoading />}>{page}</Suspense>
       <BottomNav active={activeTab} onNavigate={(view) => (view === 'home' ? goHome() : goTo(view))} />
     </div>
   );
 }
 
-function Home({ onNavigate, onOpenAdmin }: { onNavigate: (view: NavView, game?: Game | null) => void; onOpenAdmin: (tab: 'stats' | 'requests') => void }) {
+function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistory }: {
+  onNavigate: (view: NavView, game?: Game | null) => void;
+  onOpenAdmin: (target: AdminOpenTarget, game?: Game) => void;
+  notices: MoneyNotice[];
+  onDismissNotices: () => void;
+  onOpenHistory: () => void;
+}) {
   const { formatNumber } = useFormat();
   const { user, profile } = useAuth();
   const { t } = useT();
@@ -181,7 +243,8 @@ function Home({ onNavigate, onOpenAdmin }: { onNavigate: (view: NavView, game?: 
       </header>
 
       <main className="relative z-10 mx-auto max-w-2xl space-y-6 px-4 py-6 sm:px-5">
-        {profile?.is_admin && <AdminHomeCard onOpen={onOpenAdmin} />}
+        {profile?.is_admin && <AdminHomeCard statuses={gameStatuses} onOpen={onOpenAdmin} />}
+        <MoneyNotices notices={notices} onDismiss={onDismissNotices} onOpenHistory={onOpenHistory} />
         {gameStatusError && (
           <Alert details={gameStatusErrorDetails} onRetry={() => void refreshGameStatus()}>
             {t('dashboard.scheduleError')} {gameStatusError}
@@ -243,6 +306,8 @@ function Home({ onNavigate, onOpenAdmin }: { onNavigate: (view: NavView, game?: 
             ))}
           </div>
         </section>
+
+        <InstallBanner />
 
         <button
           type="button"

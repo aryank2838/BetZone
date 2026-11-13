@@ -51,6 +51,7 @@ INSERT INTO function_execute_allowlist (grantee, routine_name) VALUES
   ('authenticated', 'is_current_user_admin'),
   ('authenticated', 'is_valid_patti'),
   ('authenticated', 'is_valid_patti_combo'),
+  ('authenticated', 'mark_money_notices_seen'),
   ('authenticated', 'patti_digit'),
   ('authenticated', 'request_add_funds'),
   ('authenticated', 'request_withdrawal'),

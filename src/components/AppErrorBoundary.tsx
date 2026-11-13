@@ -1,7 +1,5 @@
 import { Component, type ReactNode } from 'react';
-import * as Sentry from '@sentry/react';
-
-const APP_VERSION = '0.0.0';
+import { reportError } from '@/lib/monitoring';
 
 interface Props {
   children: ReactNode;
@@ -19,7 +17,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    Sentry.captureException(error, { tags: { app_version: APP_VERSION } });
+    reportError(error);
   }
 
   render() {

@@ -69,31 +69,31 @@ export default function SupportTab() {
     <section className="space-y-4">
       <header className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2"><LifeBuoy className="h-4 w-4 text-cyan-400" /><h2 className="text-sm font-semibold">Support tickets</h2></div>
-        <select value={status} onChange={(event) => setStatus(event.target.value as 'open' | 'closed')} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs">
+        <select value={status} onChange={(event) => setStatus(event.target.value as 'open' | 'closed')} className="rounded-lg border border-surface-strong bg-surface-raised px-3 py-2 text-xs">
           <option value="open">Open</option><option value="closed">Closed</option>
         </select>
       </header>
       {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
       {busy && tickets.length === 0 ? <ListSkeleton rows={3} /> :
-        tickets.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">No {status} tickets.</p> :
+        tickets.length === 0 ? <p className="py-8 text-center text-sm text-ink-muted">No {status} tickets.</p> :
           <div className="space-y-3">
-            {tickets.map((ticket) => <article key={ticket.id} className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
+            {tickets.map((ticket) => <article key={ticket.id} className="space-y-3 rounded-control border border-surface-border bg-surface p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-white">{ticket.user_name} · <span className="capitalize">{ticket.category}</span></p>
-                <p className="text-xs text-slate-400">{formatDate(ticket.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                <p className="text-sm font-semibold text-ink-strong">{ticket.user_name} · <span className="capitalize">{ticket.category}</span></p>
+                <p className="text-xs text-ink-muted">{formatDate(ticket.created_at, { dateStyle: 'medium', timeStyle: 'short' })}</p>
               </div>
-              <p className="whitespace-pre-wrap text-sm text-slate-300">{ticket.message}</p>
+              <p className="whitespace-pre-wrap text-sm text-ink-soft">{ticket.message}</p>
               {ticket.request_ref && <p className="break-all text-xs text-cyan-300">Request: {ticket.request_ref}</p>}
               {ticket.status === 'open' ? <>
-                <textarea value={note[ticket.id] ?? ''} maxLength={1000} rows={2} onChange={(event) => setNote((previous) => ({ ...previous, [ticket.id]: event.target.value }))} placeholder="Optional note for user" className="w-full rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-sm" />
-                <button type="button" disabled={busy} onClick={() => void close(ticket.id)} className="rounded-lg bg-cyan-700 px-4 py-2 text-xs font-medium text-white disabled:opacity-40">Close ticket</button>
+                <textarea value={note[ticket.id] ?? ''} maxLength={1000} rows={2} onChange={(event) => setNote((previous) => ({ ...previous, [ticket.id]: event.target.value }))} placeholder="Optional note for user" className="w-full rounded-lg border border-surface-strong bg-surface-raised p-2.5 text-sm" />
+                <button type="button" disabled={busy} onClick={() => void close(ticket.id)} className="rounded-lg bg-cyan-700 px-4 py-2 text-xs font-medium text-ink-strong disabled:opacity-40">Close ticket</button>
               </> : <>
                 <p className="text-xs text-emerald-300">Closed {ticket.closed_at ? formatDate(ticket.closed_at, { dateStyle: 'medium', timeStyle: 'short' }) : ''}</p>
-                {ticket.admin_note && <p className="text-xs text-slate-400">Note: {ticket.admin_note}</p>}
+                {ticket.admin_note && <p className="text-xs text-ink-muted">Note: {ticket.admin_note}</p>}
               </>}
             </article>)}
           </div>}
-      {hasMore && <button type="button" disabled={loadingMore || busy} onClick={() => { setLoadingMore(true); void load(status, offset + 30, true); }} className="w-full rounded-lg border border-slate-700 py-2.5 text-xs text-slate-300 disabled:opacity-40">{loadingMore ? 'Loading…' : 'Load more'}</button>}
+      {hasMore && <button type="button" disabled={loadingMore || busy} onClick={() => { setLoadingMore(true); void load(status, offset + 30, true); }} className="w-full rounded-lg border border-surface-strong py-2.5 text-xs text-ink-soft disabled:opacity-40">{loadingMore ? 'Loading…' : 'Load more'}</button>}
     </section>
   );
 }

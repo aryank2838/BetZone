@@ -7,8 +7,11 @@ import AppErrorBoundary from '@/components/AppErrorBoundary';
 import NotConfigured from '@/components/NotConfigured';
 import { initializeMonitoring } from '@/lib/monitoring';
 import { missingSupabaseConfig, supabaseConfigured } from '@/lib/supabase';
+import { captureInstallPrompt, registerServiceWorker } from '@/lib/installPrompt';
 
-initializeMonitoring();
+void initializeMonitoring();
+captureInstallPrompt();
+registerServiceWorker();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {supabaseConfigured ? (

@@ -12,7 +12,7 @@ describe('content security policy', () => {
       ...productionEnv,
       VITE_SENTRY_DSN: 'https://public@o123.ingest.sentry.io/456',
     });
-    expect(production).toContain("connect-src 'self' https://project.supabase.co https://o123.ingest.sentry.io");
+    expect(production).toContain("connect-src 'self' https://project.supabase.co wss://project.supabase.co https://o123.ingest.sentry.io");
     expect(production).not.toContain('ws://localhost');
     expect(production).not.toContain('ws://127.0.0.1');
     expect(production).not.toContain('wss://*.supabase.co');

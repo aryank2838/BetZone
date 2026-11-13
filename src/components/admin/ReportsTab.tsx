@@ -100,24 +100,24 @@ export default function ReportsTab() {
     <section className="space-y-5 animate-fade-in">
       <header>
         <h3 className="text-lg font-semibold">Daily reconciliation</h3>
-        <p className="text-xs text-slate-400">Amounts use IST. Gaming revenue is stakes minus payouts; approved deposits and withdrawals are reported separately as net cash for all games.</p>
+        <p className="text-xs text-ink-muted">Amounts use IST. Gaming revenue is stakes minus payouts; approved deposits and withdrawals are reported separately as net cash for all games.</p>
       </header>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex-1 text-xs text-slate-400">Report date (IST)
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2.5 text-sm text-white" />
+        <label className="flex-1 text-xs text-ink-muted">Report date (IST)
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-1 w-full rounded-lg border border-surface-strong bg-surface-raised p-2.5 text-sm text-ink-strong" />
         </label>
-        <button type="button" disabled={loading || !daily.length} onClick={downloadCsv} className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2.5 text-sm text-slate-200 disabled:opacity-40">
+        <button type="button" disabled={loading || !daily.length} onClick={downloadCsv} className="flex items-center gap-2 rounded-lg border border-surface-strong px-3 min-h-tap py-2.5 text-sm text-slate-200 disabled:opacity-40">
           <Download className="h-4 w-4" /> Download CSV
         </button>
       </div>
       {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
       {loading ? <ListSkeleton rows={3} /> : (
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
+        <div className="overflow-x-auto rounded-control border border-surface-border">
           <table className="w-full min-w-[760px] text-left text-xs">
-            <thead className="bg-slate-900 text-slate-400"><tr>
+            <thead className="bg-surface text-ink-muted"><tr>
               {['Game', 'Staked', 'Paid out', 'Gaming revenue', 'Approved deposits', 'Approved withdrawals', 'Net cash'].map((label) => <th key={label} className="px-3 py-3">{label}</th>)}
             </tr></thead>
-            <tbody>{daily.map((row) => <tr key={row.game} className="border-t border-slate-800">
+            <tbody>{daily.map((row) => <tr key={row.game} className="border-t border-surface-border">
               <td className="px-3 py-3 font-medium text-slate-200">{row.game === 'ALL' ? 'All games' : GAME_LABELS[row.game]}</td>
               <td className="px-3 py-3">{row.total_staked}</td><td className="px-3 py-3">{row.total_paid_out}</td>
               <td className="px-3 py-3">{row.gaming_revenue}</td>
@@ -128,7 +128,7 @@ export default function ReportsTab() {
           </table>
         </div>
       )}
-      <section className="space-y-3 rounded-xl border border-amber-900/70 bg-amber-950/20 p-4">
+      <section className="space-y-3 rounded-control border border-amber-900/70 bg-amber-950/20 p-4">
         <div>
           <h4 className="font-semibold">Legacy opening balances</h4>
           {loading ? <Skeleton className="mt-2 h-4 w-2/3" /> : (
@@ -139,20 +139,20 @@ export default function ReportsTab() {
         </div>
         {!loading && openingBalances.map((row) => (
           <div key={row.user_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-amber-900/50 pt-2 text-xs">
-            <span className="text-slate-300">{row.display_name || 'Unnamed'} · {row.user_id}</span>
+            <span className="text-ink-soft">{row.display_name || 'Unnamed'} · {row.user_id}</span>
             <span className="text-amber-200">{row.opening_balance} · captured {new Date(row.captured_at).toLocaleString()}</span>
           </div>
         ))}
       </section>
-      <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <section className="space-y-3 rounded-control border border-surface-border bg-surface/70 p-4">
         <div>
           <h4 className="font-semibold">Balance mismatches</h4>
-          <p className="mt-1 text-xs text-slate-400">Reconciliation compares balances with ledger deltas plus the legacy opening amounts shown above. Those captured amounts are not independently validated; reports do not change balances.</p>
+          <p className="mt-1 text-xs text-ink-muted">Reconciliation compares balances with ledger deltas plus the legacy opening amounts shown above. Those captured amounts are not independently validated; reports do not change balances.</p>
         </div>
         {loading ? <div className="space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-4 w-1/2" /></div> : mismatches.length === 0 ? (
           <p className="text-sm text-emerald-300">No differences from the recorded ledger and legacy balance baseline</p>
-        ) : mismatches.map((row) => <div key={row.user_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-2 text-xs">
-          <span className="text-slate-300">{row.display_name || 'Unnamed'} · {row.user_id}</span>
+        ) : mismatches.map((row) => <div key={row.user_id} className="flex flex-wrap items-center justify-between gap-2 border-t border-surface-border pt-2 text-xs">
+          <span className="text-ink-soft">{row.display_name || 'Unnamed'} · {row.user_id}</span>
           <span className="text-rose-300">Expected {row.expected_balance} · actual {row.points + row.wallet} · difference {row.difference}</span>
         </div>)}
       </section>

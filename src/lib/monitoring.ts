@@ -1,4 +1,8 @@
-import * as Sentry from '@sentry/react';
+// Sentry is loaded on demand (only when a DSN is set) to keep it out of the
+// first download. Errors reported before it finishes loading are queued.
+type SentryModule = typeof import('@sentry/react');
+let sentry: SentryModule | null = null;
+const queued: unknown[] = [];
 
 const APP_VERSION = '0.0.0';
 const SENSITIVE_KEY = /email|upi|payment.?ref|utr|screenshot|image|file|cookie|authorization|token/i;
@@ -24,9 +28,10 @@ function scrub(value: unknown, key = ''): unknown {
   return value;
 }
 
-export function initializeMonitoring() {
+export async function initializeMonitoring() {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
   if (!dsn) return;
+  const Sentry = await import('@sentry/react');
   Sentry.init({
     dsn,
     sendDefaultPii: false,
@@ -53,4 +58,13 @@ export function initializeMonitoring() {
     },
   });
   Sentry.setTag('app_version', APP_VERSION);
+  sentry = Sentry;
+  for (const error of queued.splice(0)) Sentry.captureException(error, { tags: { app_version: APP_VERSION } });
+}
+
+/** Reports an error to Sentry when monitoring is configured; otherwise does nothing. */
+export function reportError(error: unknown) {
+  if (!import.meta.env.VITE_SENTRY_DSN) return;
+  if (sentry) sentry.captureException(error, { tags: { app_version: APP_VERSION } });
+  else if (queued.length < 20) queued.push(error);
 }

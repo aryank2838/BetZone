@@ -54,7 +54,11 @@ export function createContentSecurityPolicy(mode: string, env: BuildEnvironment)
   const sentryOrigin = env.VITE_SENTRY_DSN
     ? configuredOrigin(env.VITE_SENTRY_DSN, 'VITE_SENTRY_DSN', true)
     : null;
-  const connectSources = ["'self'", ...(supabaseOrigin ? [supabaseOrigin] : [])];
+  // Supabase Realtime (live admin alerts and money notices) uses a websocket to
+  // the same host. Listed explicitly because not every browser derives wss://
+  // from an https:// source.
+  const realtimeOrigin = supabaseOrigin ? supabaseOrigin.replace(/^http/, 'ws') : null;
+  const connectSources = ["'self'", ...(supabaseOrigin ? [supabaseOrigin] : []), ...(realtimeOrigin ? [realtimeOrigin] : [])];
   if (sentryOrigin) connectSources.push(sentryOrigin);
   if (!production) connectSources.push('ws://localhost:*', 'ws://127.0.0.1:*');
 
