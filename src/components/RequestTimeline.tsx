@@ -1,6 +1,10 @@
 import { CheckCircle2, Clock, XCircle } from 'lucide-react';
 import type { UserRequest } from '@/lib/useUserRequests';
 import { useFormat } from '@/i18n/useFormat';
+import { useT } from '@/i18n/useT';
+import Alert from '@/components/ui/Alert';
+import Badge from '@/components/ui/Badge';
+import { SectionTitle } from '@/components/ui/Card';
 
 interface RequestTimelineProps {
   requests: UserRequest[];
@@ -9,57 +13,55 @@ interface RequestTimelineProps {
 
 export default function RequestTimeline({ requests, error }: RequestTimelineProps) {
   const { formatNumber, formatDate } = useFormat();
+  const { t } = useT();
   return (
-    <section>
-      <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Requests</h3>
-      {error && (
-        <div className="mb-3 rounded-xl border border-rose-900 bg-rose-950/30 px-4 py-3 text-sm text-rose-300">
-          <p>{error.message}</p>
-          {error.raw && <p className="mt-1 text-xs text-rose-400/70">{error.raw}</p>}
-        </div>
-      )}
+    <section aria-labelledby="requests-title">
+      <SectionTitle id="requests-title">{t('requests.title')}</SectionTitle>
+      {error && <Alert details={error.raw} className="mb-3">{error.message}</Alert>}
       {requests.length === 0 ? (
-        <p className="text-sm text-slate-400">No deposit or withdrawal requests yet.</p>
+        <p className="text-sm text-ink-muted">{t('requests.empty')}</p>
       ) : (
         <div className="space-y-3">
           {requests.map((request) => {
             const rejected = request.status === 'rejected';
             const approved = request.status === 'approved';
-            const statusColor = rejected ? 'text-rose-400' : approved ? 'text-emerald-400' : 'text-amber-400';
+            const statusColor = rejected ? 'text-rose-300' : approved ? 'text-brand-300' : 'text-amber-300';
             return (
-              <article key={`${request.kind}:${request.id}`} className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
+              <article key={`${request.kind}:${request.id}`} className="rounded-card border border-surface-border bg-surface/80 p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-200">
-                      {request.kind === 'deposit' ? 'Deposit' : 'Withdrawal'} · {formatNumber(request.amount)} balance
+                    <p className="text-sm font-semibold text-ink-strong">
+                      {request.kind === 'deposit' ? t('requests.deposit') : t('requests.withdrawal')} · ₹{formatNumber(request.amount)}
                     </p>
-                    <p className="text-xs text-slate-400">Submitted {formatDate(request.created_at)}</p>
+                    <p className="text-xs text-ink-muted">{formatDate(request.created_at)}</p>
                   </div>
-                  <span className={`text-xs font-medium capitalize ${statusColor}`}>{request.status}</span>
+                  <Badge tone={rejected ? 'danger' : approved ? 'success' : 'warning'}>
+                    {rejected ? t('requests.rejected') : approved ? t('requests.done') : t('requests.checking')}
+                  </Badge>
                 </div>
-                <ol className="grid grid-cols-3 gap-2 text-[11px]">
-                  <li className="flex items-center gap-1.5 text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Submitted
+                <ol className="grid grid-cols-3 gap-2 text-xs">
+                  <li className="flex items-center gap-1.5 text-brand-300">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" /> {t('requests.stepSent')}
                   </li>
-                  <li className={`flex items-center gap-1.5 ${request.status === 'pending' ? 'text-amber-300' : 'text-slate-400'}`}>
+                  <li className={`flex items-center gap-1.5 ${request.status === 'pending' ? 'text-amber-300' : 'text-ink-muted'}`}>
                     {request.status === 'pending'
-                      ? <Clock className="h-3.5 w-3.5 shrink-0" />
-                      : <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
-                    Under review
+                      ? <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      : <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                    {t('requests.stepChecking')}
                   </li>
                   <li className={`flex items-center gap-1.5 ${statusColor}`}>
-                    {rejected ? <XCircle className="h-3.5 w-3.5 shrink-0" />
-                      : approved ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                        : <Clock className="h-3.5 w-3.5 shrink-0" />}
-                    {rejected ? 'Rejected' : approved ? 'Approved' : 'Decision pending'}
+                    {rejected ? <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      : approved ? <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        : <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                    {rejected ? t('requests.rejected') : approved ? t('requests.done') : t('requests.stepDecision')}
                   </li>
                 </ol>
                 {request.processed_at && (
-                  <p className="mt-2 text-[11px] text-slate-400">{rejected ? 'Rejected' : 'Processed'} {formatDate(request.processed_at)}</p>
+                  <p className="mt-2 text-xs text-ink-muted">{rejected ? t('requests.rejectedOn') : t('requests.processedOn')} {formatDate(request.processed_at)}</p>
                 )}
                 {rejected && request.reject_reason && (
-                  <p className="mt-2 rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-2 text-xs text-rose-300">
-                    Reason: {request.reject_reason}
+                  <p className="mt-2 rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
+                    {t('requests.reason')}: {request.reject_reason}
                   </p>
                 )}
               </article>

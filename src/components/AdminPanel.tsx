@@ -669,7 +669,7 @@ export default function AdminPanel({ onBack, initialTab = 'stats' }: AdminPanelP
           </button>
           <div>
             <h2 className="font-bold text-white leading-tight">Admin Panel</h2>
-            <p className="text-[11px] text-slate-400 leading-tight">Full control center</p>
+            <p className="text-xs text-slate-400 leading-tight">Full control center</p>
           </div>
           <div className="ml-auto"><HelpButton /></div>
         </div>

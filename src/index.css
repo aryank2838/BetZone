@@ -3,7 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    color-scheme: dark;
+  }
+
   body {
+    background-color: #020617;
+    color: #f1f5f9;
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
   }

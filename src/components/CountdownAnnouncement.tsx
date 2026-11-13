@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { countdownTone, formatBetWindow, formatClockTime } from '@/lib/countdown';
+import { interpolate, useT } from '@/i18n/useT';
 
 export default function CountdownAnnouncement({ cutoff, opensAt, isOpen, nowMs, label }: {
   cutoff: string;
@@ -8,6 +9,7 @@ export default function CountdownAnnouncement({ cutoff, opensAt, isOpen, nowMs, 
   nowMs: number;
   label: string;
 }) {
+  const { t, language } = useT();
   const tone = isOpen ? countdownTone(cutoff, nowMs) : 'closed';
   const lastTone = useRef(tone);
   const [announcement, setAnnouncement] = useState('');
@@ -15,14 +17,14 @@ export default function CountdownAnnouncement({ cutoff, opensAt, isOpen, nowMs, 
     if (tone === lastTone.current) return;
     lastTone.current = tone;
     setAnnouncement(!isOpen
-      ? `${label} are closed. They open at ${formatClockTime(opensAt)} IST`
+      ? interpolate(t('countdown.srClosed'), { label, time: formatClockTime(opensAt) })
       : tone === 'amber'
-        ? `${label} closes in under 10 minutes`
+        ? interpolate(t('countdown.srAmber'), { label })
       : tone === 'red'
-        ? `${label} closes in under 2 minutes`
+        ? interpolate(t('countdown.srRed'), { label })
         : tone === 'closed'
-          ? `${label} closes now`
-          : formatBetWindow(true, cutoff, opensAt, nowMs));
-  }, [cutoff, isOpen, label, nowMs, opensAt, tone]);
+          ? interpolate(t('countdown.srNow'), { label })
+          : formatBetWindow(true, cutoff, opensAt, nowMs, language));
+  }, [cutoff, isOpen, label, nowMs, opensAt, tone, t, language]);
   return <span className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</span>;
 }

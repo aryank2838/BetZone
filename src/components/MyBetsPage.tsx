@@ -3,7 +3,14 @@ import { supabase } from '@/lib/supabase';
 import { GAME_LABELS, BET_TYPES, type Game, type BetType } from '@/types';
 import HelpButton from '@/components/HelpButton';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
-import { ArrowLeft, Loader2, ReceiptText } from 'lucide-react';
+import { ReceiptText } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import Alert from '@/components/ui/Alert';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import { formatHolidayDate } from '@/lib/holiday';
+import { interpolate, useT } from '@/i18n/useT';
+import type { TranslationKey } from '@/i18n/context';
 import { ListSkeleton } from '@/components/Skeleton';
 import { useFormat } from '@/i18n/useFormat';
 import { useGameStatus } from '@/lib/useGameStatus';
@@ -26,7 +33,6 @@ interface BetRoundRow {
 }
 
 interface MyBetsPageProps {
-  onBack: () => void;
   onGames: () => void;
 }
 
@@ -43,8 +49,10 @@ function isBetRoundRow(value: unknown): value is BetRoundRow {
     && typeof row.pending_stake === 'number';
 }
 
-export default function MyBetsPage({ onBack, onGames }: MyBetsPageProps) {
+export default function MyBetsPage({ onGames }: MyBetsPageProps) {
   const { formatNumber } = useFormat();
+  const { t } = useT();
+  const rupees = (value: number) => `₹${formatNumber(value)}`;
   const { statuses: gameStatuses } = useGameStatus();
   const gameLabel = (value: string) => gameStatuses.find((status) => status.game === value)?.label
     || GAME_LABELS[value as Game] || value;
@@ -113,100 +121,86 @@ export default function MyBetsPage({ onBack, onGames }: MyBetsPageProps) {
     if (!loadingMore && hasMore) void load(offset, true);
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-5 py-3.5">
-          <button onClick={onBack} className="tap-target p-1 text-slate-400 hover:text-white" aria-label="Back">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="flex-1">
-            <h1 className="font-bold text-white">My bets</h1>
-            <p className="text-[11px] text-slate-400">Your submitted picks and results</p>
-          </div>
-          <HelpButton />
-        </div>
-      </header>
+  const statusLabel = (value: BetPick['status']) => t(value === 'won' ? 'bets.won' : value === 'lost' ? 'bets.lost' : 'bets.pending');
+  const FIELD = 'mt-1.5 w-full rounded-control border border-surface-strong bg-surface-raised px-3 py-2.5 text-sm text-ink-strong';
 
-      <main className="mx-auto max-w-2xl space-y-5 px-5 py-6">
-        <section className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:grid-cols-3">
-          <label className="text-xs text-slate-400">
-            Game
-            <select
-              value={game}
-              onChange={(event) => setGame(event.target.value as Game | '')}
-              className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white"
-            >
-              <option value="">All games</option>
+  return (
+    <div className="min-h-screen bg-surface-page text-ink">
+      <PageHeader title={t('bets.title')} subtitle={t('bets.subtitle')} actions={<HelpButton />} />
+
+      <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 sm:px-5">
+        <section aria-label={t('bets.filters')} className="grid grid-cols-1 gap-3 rounded-card border border-surface-border bg-surface/80 p-4 sm:grid-cols-3">
+          <label className="text-sm text-ink-muted">
+            {t('bets.game')}
+            <select value={game} onChange={(event) => setGame(event.target.value as Game | '')} className={FIELD}>
+              <option value="">{t('bets.allGames')}</option>
               {gameStatuses.map((status) => (
                 <option key={status.game} value={status.game}>{gameLabel(status.game)}</option>
               ))}
             </select>
           </label>
-          <label className="text-xs text-slate-400">
-            From
-            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+          <label className="text-sm text-ink-muted">
+            {t('bets.from')}
+            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className={FIELD} />
           </label>
-          <label className="text-xs text-slate-400">
-            To
-            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white" />
+          <label className="text-sm text-ink-muted">
+            {t('bets.to')}
+            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className={FIELD} />
           </label>
         </section>
 
-        {errorMessage && (
-          <div role="alert" className="rounded-xl border border-rose-900 bg-rose-950/40 px-4 py-3 text-sm text-rose-300">
-            <p>{errorMessage}</p>
-            {errorDetails && <p className="mt-1 text-xs text-rose-400/70">{errorDetails}</p>}
-            <button type="button" onClick={() => void load(0, false)} className="mt-2 text-xs font-semibold text-rose-200">Retry</button>
-          </div>
-        )}
+        {errorMessage && <Alert details={errorDetails} onRetry={() => void load(0, false)}>{errorMessage}</Alert>}
 
         {loading ? (
           <ListSkeleton rows={4} />
         ) : rows.length === 0 && !errorMessage ? (
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/80 px-5 py-12 text-center">
-            <ReceiptText className="mx-auto h-8 w-8 text-slate-400" />
-            <p className="mt-3 font-semibold text-white">No bets yet</p>
-            <p className="mt-1 text-sm text-slate-400">Your submitted picks will appear here.</p>
-            <button type="button" onClick={onGames} className="mt-5 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-400">
-              Browse games
-            </button>
+          <section className="rounded-card border border-surface-border bg-surface/80 px-5 py-12 text-center">
+            <ReceiptText className="mx-auto h-8 w-8 text-ink-muted" aria-hidden="true" />
+            <p className="mt-3 font-semibold text-ink-strong">{t('bets.emptyTitle')}</p>
+            <p className="mt-1 text-sm text-ink-muted">{t('bets.emptyBody')}</p>
+            <Button className="mt-5" onClick={onGames}>{t('bets.browse')}</Button>
           </section>
         ) : (
           <div className="space-y-5">
             {rows.map((round) => {
               const pickCount = round.bet_types.reduce((sum, betType) => sum + betType.picks.length, 0);
+              const net = roundNet(round);
               return (
-                <section key={`${round.round_date}:${round.game}`} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+                <section key={`${round.round_date}:${round.game}`} className="overflow-hidden rounded-card border border-surface-border bg-surface/80">
+                  <div className="flex flex-wrap items-start justify-between gap-2 border-b border-surface-border px-4 py-3">
                     <div>
-                      <p className="font-semibold text-white">{round.round_date} · {gameLabel(round.game)}</p>
-                      <p className="text-xs text-slate-400">
-                        Settled stake {formatNumber(settledStake(round))} · Won {formatNumber(round.won)} · Net {formatNumber(roundNet(round))}
+                      <p className="font-semibold text-ink-strong">{gameLabel(round.game)} · {formatHolidayDate(round.round_date)}</p>
+                      <p className="mt-0.5 text-sm text-ink-muted">
+                        {interpolate(t('bets.summary'), { staked: rupees(settledStake(round)), won: rupees(round.won) })}
                       </p>
                       {round.pending_stake > 0 && (
-                        <p className="text-xs text-amber-400/90">Pending stake {formatNumber(round.pending_stake)} (not settled yet)</p>
+                        <p className="text-sm text-amber-300">{interpolate(t('bets.pendingStake'), { amount: rupees(round.pending_stake) })}</p>
                       )}
                     </div>
-                    <span className="text-xs text-slate-400">{pickCount} picks</span>
+                    <div className="text-right">
+                      <Badge tone={net > 0 ? 'success' : net < 0 ? 'danger' : 'neutral'}>
+                        {interpolate(t('bets.net'), { amount: `${net > 0 ? '+' : net < 0 ? '−' : ''}${rupees(Math.abs(net))}` })}
+                      </Badge>
+                      <p className="mt-1 text-xs text-ink-muted">{interpolate(t('bets.pickCount'), { count: pickCount })}</p>
+                    </div>
                   </div>
-                  <div className="divide-y divide-slate-800/80">
+                  <div className="divide-y divide-surface-border/80">
                     {round.bet_types.map((betType) => (
                       <div key={`${round.game}-${round.round_date}-${betType.bet_type}`} className="px-4 py-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{BET_TYPES[betType.bet_type]?.label ?? betType.bet_type}</p>
-                          <p className="text-xs text-slate-400">{betType.picks.length} picks</p>
-                        </div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                          {BET_TYPES[betType.bet_type] ? t(`bet.name.${betType.bet_type}` as TranslationKey) : betType.bet_type}
+                        </p>
                         <div className="flex flex-wrap gap-2">
                           {betType.picks.map((pick, index) => (
-                            <div key={`${pick.number}-${index}`} className="min-w-[112px] rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-2 text-xs">
+                            <div key={`${pick.number}-${index}`} className="min-w-[120px] rounded-lg border border-surface-border bg-surface-page/60 px-3 py-2 text-sm">
                               <div className="flex items-center justify-between gap-3">
-                                <span className="font-bold text-white">{pick.number}</span>
-                                <span className={pick.status === 'won' ? 'text-emerald-400' : pick.status === 'lost' ? 'text-slate-400' : 'text-amber-400'}>
-                                  {pick.status}
-                                </span>
+                                <span className="font-bold tabular-nums text-ink-strong">{pick.number}</span>
+                                <Badge tone={pick.status === 'won' ? 'success' : pick.status === 'lost' ? 'neutral' : 'warning'}>{statusLabel(pick.status)}</Badge>
                               </div>
-                              <p className="mt-1 text-slate-400">Stake {formatNumber(pick.stake)} · Payout {formatNumber(pick.payout)}</p>
+                              <p className="mt-1 text-xs text-ink-muted">
+                                {interpolate(t('betslip.stake'), { points: formatNumber(pick.stake) })}
+                                {pick.status === 'won' && <> · <span className="text-brand-300">{interpolate(t('bets.paid'), { amount: rupees(pick.payout) })}</span></>}
+                              </p>
                             </div>
                           ))}
                         </div>
@@ -217,10 +211,9 @@ export default function MyBetsPage({ onBack, onGames }: MyBetsPageProps) {
               );
             })}
             {hasMore && (
-              <button type="button" onClick={loadMore} disabled={loadingMore} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-900 disabled:opacity-50">
-                {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
-                Load more
-              </button>
+              <Button variant="secondary" fullWidth loading={loadingMore} onClick={loadMore}>
+                {t('common.loadMore')}
+              </Button>
             )}
           </div>
         )}

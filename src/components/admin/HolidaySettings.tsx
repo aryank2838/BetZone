@@ -61,7 +61,7 @@ function GameHolidayRow({ status, onChanged }: { status: GameStatus; onChanged: 
     <div className="rounded-xl border border-slate-800 p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-white">{label}</p>
-        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${onHoliday ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-400'}`}>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${onHoliday ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-400'}`}>
           {onHoliday && status.holiday_reopens_on ? `On holiday until ${formatHolidayDate(status.holiday_reopens_on)}` : 'Running normally'}
         </span>
       </div>

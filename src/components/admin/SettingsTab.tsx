@@ -51,7 +51,7 @@ function SettingField({ settingKey, label, value, help, meta, saving, onChange, 
         <button type="button" onClick={() => onSave(settingKey, value)} disabled={saving} className={saveClass} aria-label={`Save ${label}`}>Save</button>
       </div>
       {help && <p className="text-xs text-slate-400 mt-1.5">{help}</p>}
-      <p className="text-[11px] text-slate-400 mt-1" data-testid={`setting-meta-${settingKey}`}>{lastChangedText(meta[settingKey])}</p>
+      <p className="text-xs text-slate-400 mt-1" data-testid={`setting-meta-${settingKey}`}>{lastChangedText(meta[settingKey])}</p>
     </div>
   );
 }

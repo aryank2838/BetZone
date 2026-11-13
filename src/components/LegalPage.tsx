@@ -1,4 +1,6 @@
-import { ArrowLeft } from 'lucide-react';
+import PageHeader from '@/components/ui/PageHeader';
+import Alert from '@/components/ui/Alert';
+import { useT } from '@/i18n/useT';
 
 export type LegalDocument = 'terms' | 'privacy' | 'contact';
 
@@ -99,14 +101,15 @@ const CONTENT: Record<LegalDocument, { title: string; sections: LegalSection[] }
 const isDraft = (text: string) => text.startsWith('[OWNER/');
 
 export default function LegalPage({ document, onBack }: { document: LegalDocument; onBack: () => void }) {
+  const { t, language } = useT();
   const content = CONTENT[document];
   const draft = content.sections.some((section) => isDraft(section.text));
   return (
-    <main className="min-h-screen bg-slate-950 px-5 py-8 text-slate-100">
-      <div className="mx-auto max-w-2xl">
-        <button type="button" onClick={onBack} className="tap-target mb-6 flex items-center gap-2 text-sm text-slate-400 hover:text-white"><ArrowLeft className="h-4 w-4" /> Back</button>
-        <h1 className="mb-5 text-2xl font-bold">{content.title}</h1>
-        <div className={`space-y-5 rounded-2xl border p-5 text-sm leading-6 text-slate-300 ${draft ? 'border-amber-900 bg-amber-950/20' : 'border-slate-800 bg-slate-900/60'}`}>
+    <div className="min-h-screen bg-surface-page text-ink">
+      <PageHeader title={content.title} onBack={onBack} />
+      <main className="mx-auto max-w-2xl space-y-4 px-4 py-6 sm:px-5">
+        {language !== 'en' && <Alert tone="info">{t('legal.englishOnly')}</Alert>}
+        <div className={`space-y-5 rounded-card border p-5 text-sm leading-6 text-ink-soft ${draft ? 'border-amber-900 bg-amber-950/20' : 'border-surface-border bg-surface/60'}`}>
           {content.sections.map((section) => (
             <section key={section.heading ?? section.text}>
               {section.heading && <h2 className="mb-1 text-base font-semibold text-white">{section.heading}</h2>}
@@ -122,7 +125,7 @@ export default function LegalPage({ document, onBack }: { document: LegalDocumen
             </section>
           ))}
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

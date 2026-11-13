@@ -1,40 +1,66 @@
-import { useState } from 'react';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { BookOpen, ChevronRight, FileText, LogOut, Mail, Shield, ShieldCheck, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
+import type { NavView } from '@/lib/useNav';
 import HelpButton from '@/components/HelpButton';
 import LanguageSelector from '@/components/LanguageSelector';
+import PageHeader from '@/components/ui/PageHeader';
+import { Card, SectionTitle } from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Alert from '@/components/ui/Alert';
+import { useToast } from '@/components/ui/toastContext';
 import { useT } from '@/i18n/useT';
 
-export default function SettingsPage({ onBack, onPlayLimits }: { onBack: () => void; onPlayLimits: () => void }) {
+const INPUT = 'w-full rounded-control border border-surface-strong bg-surface-raised px-3 py-3 text-sm text-ink-strong focus:border-brand-400 focus:outline-none';
+
+function LinkRow({ icon, label, onClick, tone = 'default' }: { icon: ReactNode; label: string; onClick: () => void; tone?: 'default' | 'admin' }) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`flex min-h-[52px] w-full items-center gap-3 px-4 text-left text-sm hover:bg-surface-raised/50 ${tone === 'admin' ? 'text-amber-200' : 'text-ink-soft'}`}
+      >
+        <span className="text-ink-muted" aria-hidden="true">{icon}</span>
+        <span className="flex-1">{label}</span>
+        <ChevronRight className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+      </button>
+    </li>
+  );
+}
+
+export default function SettingsPage({ onNavigate }: { onNavigate: (view: NavView) => void }) {
   const { user, profile, refreshProfile, signOut } = useAuth();
   const [name, setName] = useState(profile?.display_name ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; okay?: boolean } | null>(null);
+  const [busy, setBusy] = useState<'name' | 'password' | null>(null);
+  const [error, setError] = useState<{ text: string; raw?: string } | null>(null);
   const { t } = useT();
+  const toast = useToast();
 
   const saveName = async () => {
-    if (!user || !name.trim() || name.trim().length > 50) { setNotice({ text: 'Name must be between 1 and 50 characters.' }); return; }
-    setBusy(true);
-    const { error } = await supabase.from('profiles').update({ display_name: name.trim() }).eq('id', user.id);
-    if (error) {
-      const friendly = friendlyErrorDetails(error);
-      setNotice({ text: friendly.raw ? `${friendly.message} ${friendly.raw}` : friendly.message });
+    if (!user || !name.trim() || name.trim().length > 50) { setError({ text: t('settings.nameLength') }); return; }
+    setBusy('name');
+    setError(null);
+    const { error: updateError } = await supabase.from('profiles').update({ display_name: name.trim() }).eq('id', user.id);
+    if (updateError) {
+      const friendly = friendlyErrorDetails(updateError);
+      setError({ text: friendly.message, raw: friendly.raw });
     } else {
       await refreshProfile();
-      setNotice({ text: t('settings.nameUpdated'), okay: true });
+      toast.show(t('settings.nameUpdated'));
     }
-    setBusy(false);
+    setBusy(null);
   };
 
   const changePassword = async () => {
-    if (!user?.email || !currentPassword) { setNotice({ text: 'Enter your current password.' }); return; }
-    if (newPassword.length < 8) { setNotice({ text: 'New password must be at least 8 characters.' }); return; }
-    setBusy(true);
-    setNotice(null);
+    if (!user?.email || !currentPassword) { setError({ text: t('settings.enterCurrent') }); return; }
+    if (newPassword.length < 8) { setError({ text: t('auth.errorPassword') }); return; }
+    setBusy('password');
+    setError(null);
     try {
       const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
       if (verifyError) throw verifyError;
@@ -42,37 +68,56 @@ export default function SettingsPage({ onBack, onPlayLimits }: { onBack: () => v
       if (updateError) throw updateError;
       setCurrentPassword('');
       setNewPassword('');
-      setNotice({ text: t('settings.passwordUpdated'), okay: true });
-    } catch (error) {
-      const friendly = friendlyErrorDetails(error);
-      setNotice({ text: friendly.raw ? `${friendly.message} ${friendly.raw}` : friendly.message });
-    } finally { setBusy(false); }
+      toast.show(t('settings.passwordUpdated'));
+    } catch (caught) {
+      const friendly = friendlyErrorDetails(caught);
+      setError({ text: friendly.message, raw: friendly.raw });
+    } finally { setBusy(null); }
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 px-5 py-8 text-slate-100">
-      <div className="mx-auto max-w-xl space-y-5">
-        <div className="flex items-center justify-between"><button type="button" onClick={onBack} className="flex items-center gap-2 text-sm text-slate-400"><ArrowLeft className="h-4 w-4" /> {t('common.back')}</button><HelpButton /></div>
-        <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
-        <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-semibold">{t('settings.displayName')}</h2>
-          <input value={name} maxLength={50} onChange={(event) => setName(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm" />
-          <button type="button" disabled={busy} onClick={() => void saveName()} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium disabled:opacity-40">{t('settings.saveName')}</button>
-        </section>
-        <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-semibold">{t('settings.password')}</h2>
-          <input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder={t('settings.currentPassword')} className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm" />
-          <input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder={t('settings.newPassword')} className="w-full rounded-lg border border-slate-700 bg-slate-800 p-3 text-sm" />
-          <button type="button" disabled={busy} onClick={() => void changePassword()} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium disabled:opacity-40">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t('settings.password')}</button>
-        </section>
-        <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-semibold">{t('settings.preferences')}</h2>
+    <div className="min-h-screen bg-surface-page text-ink">
+      <PageHeader title={t('account.title')} subtitle={user?.email} />
+      <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 sm:px-5">
+        {error && <Alert details={error.raw}>{error.text}</Alert>}
+
+        <Card className="space-y-3">
+          <SectionTitle>{t('settings.displayName')}</SectionTitle>
+          <label className="sr-only" htmlFor="account-name">{t('settings.displayName')}</label>
+          <input id="account-name" value={name} maxLength={50} onChange={(event) => setName(event.target.value)} className={INPUT} />
+          <Button variant="secondary" loading={busy === 'name'} disabled={busy !== null} onClick={() => void saveName()}>{t('settings.saveName')}</Button>
+        </Card>
+
+        <Card className="space-y-3">
+          <SectionTitle>{t('settings.password')}</SectionTitle>
+          <input type="password" autoComplete="current-password" aria-label={t('settings.currentPassword')} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder={t('settings.currentPassword')} className={INPUT} />
+          <input type="password" autoComplete="new-password" aria-label={t('settings.newPassword')} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder={t('settings.newPassword')} className={INPUT} />
+          <Button variant="secondary" loading={busy === 'password'} disabled={busy !== null} onClick={() => void changePassword()}>{t('settings.password')}</Button>
+        </Card>
+
+        <Card className="space-y-3">
+          <SectionTitle>{t('settings.preferences')}</SectionTitle>
           <LanguageSelector />
-          <button type="button" onClick={onPlayLimits} className="w-full rounded-lg border border-slate-700 py-2.5 text-sm text-slate-200">{t('settings.playLimits')}</button>
+        </Card>
+
+        <section aria-label={t('account.more')} className="overflow-hidden rounded-card border border-surface-border bg-surface/80">
+          <ul className="divide-y divide-surface-border">
+            <LinkRow icon={<ShieldCheck className="h-4 w-4" />} label={t('settings.playLimits')} onClick={() => onNavigate('limits')} />
+            <li><HelpButton variant="row" /></li>
+            <LinkRow icon={<BookOpen className="h-4 w-4" />} label={t('dashboard.rules')} onClick={() => onNavigate('rules')} />
+            <LinkRow icon={<FileText className="h-4 w-4" />} label={t('dashboard.terms')} onClick={() => onNavigate('terms')} />
+            <LinkRow icon={<Lock className="h-4 w-4" />} label={t('dashboard.privacy')} onClick={() => onNavigate('privacy')} />
+            <LinkRow icon={<Mail className="h-4 w-4" />} label={t('dashboard.contact')} onClick={() => onNavigate('contact')} />
+            {profile?.is_admin && (
+              <LinkRow icon={<Shield className="h-4 w-4 text-amber-400" />} label={t('dashboard.adminPanel')} onClick={() => onNavigate('admin')} tone="admin" />
+            )}
+          </ul>
         </section>
-        {notice && <p role="status" className={notice.okay ? 'text-sm text-emerald-300' : 'text-sm text-rose-300'}>{notice.text}</p>}
-        <button type="button" onClick={() => void signOut()} className="w-full rounded-lg border border-rose-900 py-3 text-sm text-rose-300">Log out</button>
-      </div>
-    </main>
+
+        <Button variant="danger" size="lg" fullWidth icon={<LogOut className="h-4 w-4" />} onClick={() => void signOut()}>
+          {t('common.logout')}
+        </Button>
+      </main>
+    </div>
   );
 }

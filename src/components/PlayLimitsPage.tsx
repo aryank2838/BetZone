@@ -1,19 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Loader2, ShieldAlert } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { activePlayRestriction, formatLimitEnd, useMyLimits } from '@/lib/useMyLimits';
 import { friendlyErrorDetails } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import HelpButton from '@/components/HelpButton';
+import PlayLimitsSummary from '@/components/PlayLimitsSummary';
 import { useDialogA11y } from '@/lib/useDialogA11y';
+import PageHeader from '@/components/ui/PageHeader';
+import Alert from '@/components/ui/Alert';
+import Button from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { CardSkeleton } from '@/components/Skeleton';
+import { useToast } from '@/components/ui/toastContext';
+import { useFormat } from '@/i18n/useFormat';
+import { interpolate, useT } from '@/i18n/useT';
 
 export default function PlayLimitsPage({ onBack }: { onBack: () => void }) {
   const { refreshProfile } = useAuth();
   const { limits, error, refresh } = useMyLimits();
+  const { t } = useT();
+  const { formatNumber } = useFormat();
+  const toast = useToast();
   const [deposit, setDeposit] = useState('');
   const [loss, setLoss] = useState('');
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<{ message: string; raw?: string; okay?: boolean } | null>(null);
+  const [notice, setNotice] = useState<{ message: string; raw?: string } | null>(null);
   const [confirmation, setConfirmation] = useState<number | null>(null);
   const confirmationRef = useRef<HTMLDivElement>(null);
   const closeConfirmation = useCallback(() => setConfirmation(null), []);
@@ -33,7 +45,7 @@ export default function PlayLimitsPage({ onBack }: { onBack: () => void }) {
   const saveLimits = async () => {
     const validValue = (value: string) => value === '' || (/^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)));
     if (!validValue(deposit) || !validValue(loss)) {
-      setNotice({ message: 'Enter a positive whole number or leave a limit empty to remove it.' });
+      setNotice({ message: t('limits.invalid') });
       return;
     }
     setBusy(true);
@@ -45,7 +57,7 @@ export default function PlayLimitsPage({ onBack }: { onBack: () => void }) {
       });
       if (rpcError) throw rpcError;
       await refresh();
-      setNotice({ message: 'Play limits updated. Raises and removals take effect after 24 hours.', okay: true });
+      toast.show(t('limits.saved'));
     } catch (caught) {
       const friendly = friendlyErrorDetails(caught);
       setNotice({ message: friendly.message, raw: friendly.raw });
@@ -64,7 +76,7 @@ export default function PlayLimitsPage({ onBack }: { onBack: () => void }) {
       await refresh();
       await refreshProfile();
       setConfirmation(null);
-      setNotice({ message: kind === 'cooldown' ? 'Your break has started.' : 'Self-exclusion has started.', okay: true });
+      toast.show(kind === 'cooldown' ? t('limits.breakStarted') : t('limits.exclusionStarted'));
     } catch (caught) {
       const friendly = friendlyErrorDetails(caught);
       setNotice({ message: friendly.message, raw: friendly.raw });
@@ -74,77 +86,76 @@ export default function PlayLimitsPage({ onBack }: { onBack: () => void }) {
   };
 
   const restriction = activePlayRestriction(limits);
-  const pendingLimit = limits?.pending_effective_at
-    ? `A scheduled limit change takes effect ${formatLimitEnd(limits.pending_effective_at)}.`
-    : '';
+  const durationLabel = (hours: number) => hours < 24
+    ? interpolate(t(hours === 1 ? 'limits.hour' : 'limits.hours'), { count: hours })
+    : interpolate(t(hours === 24 ? 'limits.day' : 'limits.days'), { count: hours / 24 });
+  const currentLabel = (value: number | null) => value === null ? t('limits.noLimit') : `₹${formatNumber(value)}`;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/90 px-5 py-4">
-        <div className="mx-auto flex max-w-2xl items-center gap-3">
-          <button type="button" onClick={onBack} aria-label="Back" className="tap-target"><ArrowLeft className="h-5 w-5 text-slate-400" /></button>
-          <div className="flex-1"><h1 className="font-bold">Play limits</h1><p className="text-xs text-slate-400">Set boundaries that work for you</p></div>
-          <HelpButton />
-        </div>
-      </header>
-      <main className="mx-auto max-w-2xl space-y-6 px-5 py-8">
-        {error && <Notice message={error.message} raw={error.raw} />}
+    <div className="min-h-screen bg-surface-page text-ink">
+      <PageHeader title={t('settings.playLimits')} subtitle={t('limits.subtitle')} onBack={onBack} actions={<HelpButton />} />
+      <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 sm:px-5">
+        {error && <Alert details={error.raw} onRetry={() => void refresh()}>{error.message}</Alert>}
         {restriction && (
-          <div className="rounded-xl border border-amber-800 bg-amber-950/30 p-4 text-sm text-amber-200">
-            {restriction.kind === 'cooldown' ? 'Your betting break is active' : 'Self-exclusion is active'} until {formatLimitEnd(restriction.until)}. Deposits are available except during self-exclusion; withdrawals remain available.
-          </div>
+          <Alert tone="warning">
+            {interpolate(t(restriction.kind === 'cooldown' ? 'restriction.cooldown' : 'restriction.selfExclusion'), { date: formatLimitEnd(restriction.until) })}
+          </Alert>
         )}
+        {notice && <Alert details={notice.raw}>{notice.message}</Alert>}
         {limits ? (
           <>
-            <section className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="font-semibold">Daily limits</h2>
-              <p className="text-xs text-slate-400">Deposit limit counts approved and pending deposits today (IST). Loss limit counts today's stakes minus winnings (IST). Lowering applies immediately; raising or removing a limit takes 24 hours.</p>
-              <LimitInput label="Daily deposit limit (balance)" value={deposit} current={limits.daily_deposit_limit} setValue={setDeposit} />
-              <LimitInput label="Daily net-loss limit (balance)" value={loss} current={limits.daily_loss_limit} setValue={setLoss} />
-              {pendingLimit && <p className="text-xs text-amber-300">{pendingLimit}</p>}
+            {(limits.daily_deposit_limit !== null || limits.daily_loss_limit !== null) && (
+              <PlayLimitsSummary limits={limits} onOpen={() => document.getElementById('daily-limits')?.scrollIntoView({ behavior: 'smooth' })} />
+            )}
+            <Card className="space-y-4" id="daily-limits">
+              <h2 className="font-semibold text-ink-strong">{t('limits.dailyTitle')}</h2>
+              <p className="text-sm text-ink-muted">{t('limits.dailyHelp')}</p>
+              <LimitInput label={t('limits.depositInput')} value={deposit} current={currentLabel(limits.daily_deposit_limit)} setValue={setDeposit} />
+              <LimitInput label={t('limits.lossInput')} value={loss} current={currentLabel(limits.daily_loss_limit)} setValue={setLoss} />
               {limits.pending_effective_at && (
-                <p className="text-xs text-slate-400">
-                  Scheduled values: deposits {limits.pending_deposit_limit ?? 'no limit'} · losses {limits.pending_loss_limit ?? 'no limit'}
-                </p>
+                <Alert tone="info">
+                  {interpolate(t('limits.scheduled'), {
+                    date: formatLimitEnd(limits.pending_effective_at),
+                    deposit: currentLabel(limits.pending_deposit_limit),
+                    loss: currentLabel(limits.pending_loss_limit),
+                  })}
+                </Alert>
               )}
-              <button type="button" disabled={busy} onClick={() => void saveLimits()} className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white disabled:opacity-40">
-                {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Save limits'}
-              </button>
-            </section>
-            <section className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="font-semibold">Take a break</h2>
-              <p className="text-xs text-slate-400">Betting is blocked during a cooldown. You can still withdraw.</p>
+              <Button size="lg" fullWidth loading={busy} onClick={() => void saveLimits()}>{t('limits.save')}</Button>
+            </Card>
+            <Card className="space-y-4">
+              <h2 className="font-semibold text-ink-strong">{t('limits.breakTitle')}</h2>
+              <p className="text-sm text-ink-muted">{t('limits.breakHelp')}</p>
               <div className="grid grid-cols-2 gap-2">
                 {[1, 6, 24, 72].map((hours) => (
-                  <button key={hours} type="button" disabled={busy} onClick={() => void startRestriction('cooldown', hours)} className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-40">
-                    {hours < 24 ? `${hours} hour${hours > 1 ? 's' : ''}` : `${hours / 24} day${hours > 24 ? 's' : ''}`}
-                  </button>
+                  <Button key={hours} variant="secondary" disabled={busy} onClick={() => void startRestriction('cooldown', hours)}>
+                    {durationLabel(hours)}
+                  </Button>
                 ))}
               </div>
-            </section>
-            <section className="space-y-4 rounded-2xl border border-rose-900/70 bg-rose-950/20 p-5">
-              <div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-rose-400" /><h2 className="font-semibold">Self-exclusion</h2></div>
-              <p className="text-xs text-slate-300">Self-exclusion blocks betting and deposits. It cannot be undone before the end date. Withdrawals remain available. For help lifting a restriction after it ends, contact support.</p>
+            </Card>
+            <section className="space-y-4 rounded-card border border-rose-900/70 bg-rose-950/20 p-5">
+              <div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-rose-400" aria-hidden="true" /><h2 className="font-semibold text-ink-strong">{t('limits.exclusionTitle')}</h2></div>
+              <p className="text-sm text-ink-soft">{t('limits.exclusionHelp')}</p>
               <div className="grid grid-cols-2 gap-2">
                 {[7, 30, 90, 180].map((days) => (
-                  <button key={days} type="button" disabled={busy} onClick={() => setConfirmation(days)} className="rounded-lg border border-rose-900 px-3 py-2 text-sm text-rose-200 hover:bg-rose-950 disabled:opacity-40">
-                    {days} days
-                  </button>
+                  <Button key={days} variant="danger" disabled={busy} onClick={() => setConfirmation(days)}>
+                    {interpolate(t('limits.days'), { count: days })}
+                  </Button>
                 ))}
               </div>
             </section>
           </>
-        ) : !error ? <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" /> : null}
-        {notice && <Notice {...notice} />}
+        ) : !error ? <CardSkeleton /> : null}
       </main>
       {confirmation !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5">
-          <div ref={confirmationRef} role="dialog" aria-modal="true" className="w-full max-w-sm space-y-4 rounded-2xl border border-rose-900 bg-slate-900 p-5">
-            <h2 className="font-semibold text-white">Confirm {confirmation}-day self-exclusion</h2>
-            <p className="text-sm text-slate-300">This blocks betting and deposits until the end date. <strong>This cannot be undone before the end date.</strong></p>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setConfirmation(null)} className="flex-1 rounded-lg border border-slate-700 py-2 text-sm">Go back</button>
-              <button type="button" disabled={busy} onClick={() => void startRestriction('self_exclusion', confirmation)} className="flex-1 rounded-lg bg-rose-700 py-2 text-sm font-semibold disabled:opacity-40">Confirm</button>
+          <div ref={confirmationRef} role="dialog" aria-modal="true" aria-labelledby="exclusion-title" className="w-full max-w-sm space-y-4 rounded-card border border-rose-900 bg-surface p-5">
+            <h2 id="exclusion-title" className="font-semibold text-ink-strong">{interpolate(t('limits.confirmTitle'), { count: confirmation })}</h2>
+            <p className="text-sm text-ink-soft">{t('limits.confirmBody')} <strong>{t('limits.confirmStrong')}</strong></p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => setConfirmation(null)}>{t('limits.goBack')}</Button>
+              <Button variant="danger" loading={busy} onClick={() => void startRestriction('self_exclusion', confirmation)}>{t('limits.confirm')}</Button>
             </div>
           </div>
         </div>
@@ -156,16 +167,20 @@ export default function PlayLimitsPage({ onBack }: { onBack: () => void }) {
 function LimitInput({ label, value, current, setValue }: {
   label: string;
   value: string;
-  current: number | null;
+  current: string;
   setValue: (value: string) => void;
 }) {
+  const { t } = useT();
   return (
-    <label className="block text-xs text-slate-300">{label} <span className="text-slate-400">Current: {current ?? 'No limit'}</span>
-      <input type="text" inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value)} placeholder="No limit" className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white focus:border-emerald-400 focus:outline-none" />
+    <label className="block text-sm text-ink-soft">
+      <span className="flex flex-wrap items-baseline justify-between gap-2">
+        <span>{label}</span>
+        <span className="text-xs text-ink-muted">{interpolate(t('limits.current'), { value: current })}</span>
+      </span>
+      <span className="relative mt-1.5 block">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden="true">₹</span>
+        <input type="text" inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value)} placeholder={t('limits.noLimit')} className="w-full rounded-control border border-surface-strong bg-surface-raised py-3 pl-7 pr-3 text-sm text-ink-strong focus:border-brand-400 focus:outline-none" />
+      </span>
     </label>
   );
-}
-
-function Notice({ message, raw, okay }: { message: string; raw?: string; okay?: boolean }) {
-  return <div className={`rounded-xl border px-4 py-3 text-sm ${okay ? 'border-emerald-900 bg-emerald-950/30 text-emerald-300' : 'border-rose-900 bg-rose-950/30 text-rose-300'}`}><p>{message}</p>{raw && <p className="mt-1 text-xs">{raw}</p>}</div>;
 }

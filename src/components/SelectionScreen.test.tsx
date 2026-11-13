@@ -82,10 +82,12 @@ describe('selection bet slip', () => {
     );
 
     await screen.findByRole('button', { name: '00' });
-    fireEvent.change(screen.getByLabelText('Stake per pick:'), { target: { value: '50' } });
+    fireEvent.change(screen.getByLabelText('Bet per number'), { target: { value: '50' } });
     fireEvent.click(screen.getByRole('button', { name: '00' }));
     fireEvent.click(screen.getByRole('button', { name: '01' }));
-    fireEvent.click(screen.getByRole('button', { name: /Review|Submit/i }));
+    // The sticky slip bar shows the running count and total.
+    expect(screen.getByText(/2 numbers · ₹100/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Review bets/i }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Check your bets' });
     expect(within(dialog).getByText('Number of bets').nextSibling).toHaveTextContent('2');

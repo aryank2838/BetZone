@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { useFormat } from '@/i18n/useFormat';
-import { Clock, Loader2, Send } from 'lucide-react';
+import { interpolate, useT } from '@/i18n/useT';
+import { Send } from 'lucide-react';
+import Alert from '@/components/ui/Alert';
+import Button from '@/components/ui/Button';
+import { useToast } from '@/components/ui/toastContext';
 
 export interface WalletStatus {
   points: number;
@@ -24,67 +28,71 @@ interface WithdrawalFormProps {
 }
 
 const UPI_ID_PATTERN = /^[A-Za-z0-9._-]{2,255}@[A-Za-z]{2,64}$/;
+const INPUT = 'w-full rounded-control border border-surface-strong bg-surface-raised px-4 py-3 text-sm text-ink-strong focus:border-brand-400 focus:outline-none';
 
 export default function WithdrawalForm({ status, onSubmitted, onSubmittingChange }: WithdrawalFormProps) {
   const { formatNumber } = useFormat();
+  const { t } = useT();
+  const toast = useToast();
   const [amount, setAmount] = useState('');
   const [upiId, setUpiId] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string; raw?: string } | null>(null);
+  const [error, setError] = useState<{ text: string; raw?: string } | null>(null);
+  const rupees = (value: number) => `₹${formatNumber(value)}`;
 
   const disabledReason = !status
-    ? 'Withdrawal availability is loading.'
+    ? t('withdraw.loading')
     : status.is_banned
-      ? 'Withdrawals are unavailable for this account.'
+      ? t('withdraw.banned')
     : status.pending_withdrawals > 0
-      ? 'A withdrawal is already pending. Wait for it to be processed.'
+      ? t('withdraw.pending')
       : status.wallet < status.min_withdrawal
-        ? `Your wallet balance must be at least ${status.min_withdrawal}.`
+        ? interpolate(t('withdraw.walletMin'), { min: rupees(status.min_withdrawal) })
         : status.approved_deposits < status.min_withdrawal
-          ? `You need at least ${status.min_withdrawal} in approved deposits before withdrawing.`
+          ? interpolate(t('withdraw.depositMin'), { min: rupees(status.min_withdrawal) })
           : status.turnover_remaining > 0
-            ? `Wager ${status.turnover_remaining} more to meet the 1× approved-deposit turnover requirement.`
+            ? interpolate(t('withdraw.turnover'), { amount: rupees(status.turnover_remaining) })
             : null;
 
   const parsedAmount = /^[0-9]+$/.test(amount) ? Number(amount) : NaN;
+  const maxAllowed = status ? Math.min(status.wallet, status.max_withdrawal) : 0;
   const amountIsValid = !!status && Number.isSafeInteger(parsedAmount)
     && parsedAmount >= status.min_withdrawal
-    && parsedAmount <= Math.min(status.wallet, status.max_withdrawal);
+    && parsedAmount <= maxAllowed;
 
   const handleSubmit = async () => {
     if (!status || !status.withdrawal_eligible) return;
     if (!/^[0-9]+$/.test(amount)) {
-      setMessage({ kind: 'err', text: 'Enter a whole-number amount using digits only.' });
+      setError({ text: t('withdraw.digitsOnly') });
       return;
     }
     if (!amountIsValid) {
-      setMessage({ kind: 'err', text: `Enter an amount from ${status.min_withdrawal} to ${Math.min(status.wallet, status.max_withdrawal)}.` });
+      setError({ text: interpolate(t('withdraw.range'), { min: rupees(status.min_withdrawal), max: rupees(maxAllowed) }) });
       return;
     }
     if (!UPI_ID_PATTERN.test(upiId.trim())) {
-      setMessage({ kind: 'err', text: 'Enter a valid UPI ID, such as name@bank.' });
+      setError({ text: t('withdraw.upiInvalid') });
       return;
     }
 
     setSubmitting(true);
     onSubmittingChange?.(true);
-    setMessage(null);
+    setError(null);
     try {
-      const { error } = await supabase.rpc('request_withdrawal', {
+      const { error: rpcError } = await supabase.rpc('request_withdrawal', {
         p_amount: parsedAmount,
         p_upi_id: upiId.trim(),
       });
-      if (error) throw error;
+      if (rpcError) throw rpcError;
       setAmount('');
       setUpiId('');
-      setMessage({ kind: 'ok', text: 'Withdrawal request sent. The admin will process it soon.' });
+      toast.show(t('withdraw.sent'));
       await onSubmitted();
-    } catch (error) {
-      const friendly = friendlyError(error);
-      setMessage({
-        kind: 'err',
+    } catch (caught) {
+      const friendly = friendlyError(caught);
+      setError({
         text: friendly.message,
-        raw: friendly.key === 'errors.generic' ? rawErrorMessage(error) : undefined,
+        raw: friendly.key === 'errors.generic' ? rawErrorMessage(caught) : undefined,
       });
     } finally {
       setSubmitting(false);
@@ -95,54 +103,46 @@ export default function WithdrawalForm({ status, onSubmitted, onSubmittingChange
   return (
     <div className="space-y-4">
       {status && (
-        <p className="text-xs text-slate-400">
-          Available: {formatNumber(status.wallet)} · minimum {formatNumber(status.min_withdrawal)} · maximum {formatNumber(status.max_withdrawal)}
+        <p className="text-sm text-ink-muted">
+          {interpolate(t('withdraw.available'), { amount: rupees(status.wallet), min: rupees(status.min_withdrawal), max: rupees(status.max_withdrawal) })}
         </p>
       )}
-      {disabledReason && (
-        <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-950/30 border border-amber-900 rounded-lg px-3 py-2">
-          <Clock className="w-3.5 h-3.5 shrink-0" />
-          <span>{disabledReason}</span>
-        </div>
-      )}
+      {disabledReason && <Alert tone="warning">{disabledReason}</Alert>}
       <div>
-        <label htmlFor="withdraw-amount" className="block text-xs text-slate-400 mb-1.5">Amount (balance)</label>
+        <label htmlFor="withdraw-amount" className="mb-1.5 block text-sm font-medium text-ink-soft">{t('withdraw.amount')}</label>
         <input
           id="withdraw-amount"
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
           value={amount}
-          onFocus={(event) => event.currentTarget.scrollIntoView({ block: 'center', behavior: 'smooth' })}
-          onChange={(event) => { setAmount(event.target.value); setMessage(null); }}
+          onChange={(event) => { setAmount(event.target.value); setError(null); }}
           placeholder="e.g. 900"
-          className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none"
+          className={INPUT}
         />
       </div>
       <div>
-        <label htmlFor="withdraw-upi-id" className="block text-xs text-slate-400 mb-1.5">UPI ID</label>
+        <label htmlFor="withdraw-upi-id" className="mb-1.5 block text-sm font-medium text-ink-soft">{t('withdraw.upi')}</label>
         <input
           id="withdraw-upi-id"
           type="text"
           value={upiId}
-          onChange={(event) => { setUpiId(event.target.value); setMessage(null); }}
+          onChange={(event) => { setUpiId(event.target.value); setError(null); }}
           placeholder="yourname@upi"
-          className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none"
+          className={INPUT}
         />
       </div>
-      {message && (
-        <div className={`text-sm ${message.kind === 'ok' ? 'text-emerald-400' : 'text-rose-400'}`} role={message.kind === 'err' ? 'alert' : 'status'}>
-          <p>{message.text}</p>
-          {message.raw && <p className="mt-1 text-xs text-rose-400/70">{message.raw}</p>}
-        </div>
-      )}
-      <button
-        onClick={handleSubmit}
-        disabled={submitting || !status?.withdrawal_eligible || !amountIsValid}
-        className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-bold hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/15"
+      {error && <Alert details={error.raw}>{error.text}</Alert>}
+      <Button
+        size="lg"
+        fullWidth
+        loading={submitting}
+        disabled={!status?.withdrawal_eligible || !amountIsValid}
+        icon={<Send className="h-4 w-4" />}
+        onClick={() => void handleSubmit()}
       >
-        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Request withdrawal</>}
-      </button>
+        {t('withdraw.submit')}
+      </Button>
     </div>
   );
 }

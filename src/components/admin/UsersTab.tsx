@@ -53,8 +53,8 @@ export default function UsersTab(props: UsersTabProps) {
         <select value={status} onChange={(event) => onFilterChange({ status: event.target.value, from, to })} className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white">
           <option value="">All statuses</option><option value="active">Active</option><option value="banned">Banned</option><option value="admin">Admins</option><option value="non_admin">Non-admins</option>
         </select>
-        <label className="text-[10px] text-slate-400">Created from (IST)<input type="date" value={from} onChange={(event) => onFilterChange({ status, from: event.target.value, to })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white" /></label>
-        <label className="text-[10px] text-slate-400">Created to (IST)<input type="date" value={to} onChange={(event) => onFilterChange({ status, from, to: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white" /></label>
+        <label className="text-xs text-slate-400">Created from (IST)<input type="date" value={from} onChange={(event) => onFilterChange({ status, from: event.target.value, to })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white" /></label>
+        <label className="text-xs text-slate-400">Created to (IST)<input type="date" value={to} onChange={(event) => onFilterChange({ status, from, to: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white" /></label>
         <button onClick={onSearch} disabled={loading} className="col-span-2 rounded-xl bg-slate-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-40 transition-colors">Apply filters</button>
       </div>
 

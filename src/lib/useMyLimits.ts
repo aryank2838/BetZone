@@ -10,6 +10,10 @@ export interface MyLimits {
   pending_deposit_limit: number | null;
   pending_loss_limit: number | null;
   pending_effective_at: string | null;
+  /** Today's (IST) stakes minus winnings. Missing until the 20261113 migration is applied. */
+  today_net_loss?: number;
+  /** Today's (IST) approved + pending deposits. Missing until the 20261113 migration is applied. */
+  today_deposits?: number;
 }
 
 export function useMyLimits() {

@@ -11,19 +11,24 @@ import { useDialogA11y } from '@/lib/useDialogA11y';
 import { TERMS_VERSION, needsTermsAcceptance } from '@/lib/terms';
 import HelpButton from '@/components/HelpButton';
 import WithdrawalForm, { type WalletStatus } from '@/components/WithdrawalForm';
+import ToastProvider from '@/components/ui/ToastProvider';
+import Alert from '@/components/ui/Alert';
+import Button from '@/components/ui/Button';
+import { useT } from '@/i18n/useT';
 
 export function Gate() {
   const { user, profile, profileError, profileErrorDetails, loading, refreshProfile, passwordRecovery, inactivityWarning, signOut } = useAuth();
+  const { t } = useT();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-5">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 animate-pulse-glow">
+      <div className="min-h-screen bg-surface-page flex flex-col items-center justify-center gap-5">
+        <div className="w-14 h-14 rounded-card bg-gradient-to-br from-brand-400 to-accent-500 flex items-center justify-center shadow-lg shadow-brand-500/20 animate-pulse-glow">
           <Zap className="w-6 h-6 text-white" fill="white" />
         </div>
-        <div className="flex items-center gap-2 text-slate-400 text-sm">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          Loading BetZone
+        <div className="flex items-center gap-2 text-ink-muted text-sm">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          {t('app.loading')}
         </div>
       </div>
     );
@@ -31,18 +36,13 @@ export function Gate() {
 
   if (user && (profileError || !profile)) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-5">
-        <div className="max-w-sm text-center space-y-4">
-          <div className="text-sm text-rose-300">
-            <p>{profileError || 'Your account profile is unavailable.'}</p>
-            {profileErrorDetails && <p className="mt-1 text-xs text-rose-400/70">{profileErrorDetails}</p>}
+      <div className="min-h-screen bg-surface-page flex items-center justify-center px-5">
+        <div className="w-full max-w-sm space-y-4">
+          <Alert details={profileErrorDetails}>{profileError || t('app.profileUnavailable')}</Alert>
+          <div className="flex gap-2">
+            <Button className="flex-1" onClick={() => { void refreshProfile(); }}>{t('common.retry')}</Button>
+            <Button variant="secondary" onClick={() => { void signOut(); }}>{t('common.logout')}</Button>
           </div>
-          <button
-            onClick={() => { void refreshProfile(); }}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-500"
-          >
-            Retry
-          </button>
         </div>
       </div>
     );
@@ -149,7 +149,9 @@ function DeclinedTermsWithdrawal() {
 export default function App() {
   return (
     <AuthProvider>
-      <Gate />
+      <ToastProvider>
+        <Gate />
+      </ToastProvider>
     </AuthProvider>
   );
 }

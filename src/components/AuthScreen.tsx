@@ -181,15 +181,15 @@ export default function AuthScreen() {
         <div className="flex justify-center gap-2 mb-7">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700">
             <Trophy className="w-3 h-3 text-amber-400" />
-            <span className="text-[11px] text-slate-300 font-medium">120x Patti</span>
+            <span className="text-xs text-slate-300 font-medium">120x Patti</span>
           </div>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700">
             <TrendingUp className="w-3 h-3 text-emerald-400" />
-            <span className="text-[11px] text-slate-300 font-medium">90x Jodi</span>
+            <span className="text-xs text-slate-300 font-medium">90x Jodi</span>
           </div>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700">
             <Wallet className="w-3 h-3 text-cyan-400" />
-            <span className="text-[11px] text-slate-300 font-medium">UPI Add</span>
+            <span className="text-xs text-slate-300 font-medium">UPI Add</span>
           </div>
         </div>
 

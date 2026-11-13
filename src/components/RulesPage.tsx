@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { BET_TYPES, GAME_LABELS, type BetType } from '@/types';
 import { useGameStatus } from '@/lib/useGameStatus';
 import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
+import { formatClockTime } from '@/lib/countdown';
 import HelpButton from '@/components/HelpButton';
+import PageHeader from '@/components/ui/PageHeader';
+import Alert from '@/components/ui/Alert';
+import { Card } from '@/components/ui/Card';
+import { useFormat } from '@/i18n/useFormat';
+import { interpolate, useT } from '@/i18n/useT';
+import type { TranslationKey } from '@/i18n/context';
 
 interface PublicRulesView {
   minimum_withdrawal: number;
@@ -16,51 +22,81 @@ interface PublicRulesView {
 }
 
 export default function RulesPage({ onBack }: { onBack: () => void }) {
-  const { statuses, error, errorDetails } = useGameStatus();
+  const { statuses, error, errorDetails, refresh } = useGameStatus();
+  const { t } = useT();
+  const { formatNumber } = useFormat();
   const [rules, setRules] = useState<PublicRulesView | null>(null);
-  const [rulesError, setRulesError] = useState('');
+  const [rulesError, setRulesError] = useState<{ message: string; raw?: string } | null>(null);
+  const rupees = (value: number) => `₹${formatNumber(value)}`;
+
   useEffect(() => {
     void supabase.rpc('get_public_rules').then(({ data, error: rpcError }) => {
       if (rpcError) {
         const friendly = friendlyErrorDetails(rpcError);
-        setRulesError(friendly.raw ? `${friendly.message} ${friendly.raw}` : friendly.message);
+        setRulesError({ message: friendly.message, raw: friendly.raw });
       } else setRules(data as PublicRulesView);
     });
   }, []);
+
   return (
-    <main className="min-h-screen bg-slate-950 px-5 py-8 text-slate-100">
-      <div className="mx-auto max-w-2xl space-y-6">
-        <div className="flex items-center justify-between"><button type="button" onClick={onBack} className="tap-target flex items-center gap-2 text-sm text-slate-400 hover:text-white"><ArrowLeft className="h-4 w-4" /> Back</button><HelpButton /></div>
-        <header><h1 className="text-2xl font-bold">How it works / Rules</h1><p className="mt-1 text-sm text-slate-400">Game rules and schedules use India Standard Time (IST).</p></header>
-        <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-semibold">Bet types</h2>
-          {rules ? <p className="text-xs text-slate-400">Maximum stake per pick: {rules.maximum_bet}; maximum per submit: {rules.maximum_submit} balance.</p> : !rulesError ? <p className="text-xs text-slate-400">Loading bet limits…</p> : null}
+    <div className="min-h-screen bg-surface-page text-ink">
+      <PageHeader title={t('dashboard.rules')} subtitle={t('rules.subtitle')} onBack={onBack} actions={<HelpButton />} />
+      <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 sm:px-5">
+        {rulesError && <Alert details={rulesError.raw}>{rulesError.message}</Alert>}
+        <Card className="space-y-3">
+          <h2 className="font-semibold text-ink-strong">{t('rules.betTypes')}</h2>
+          {rules && (
+            <p className="text-sm text-ink-muted">
+              {interpolate(t('rules.betLimits'), { perBet: rupees(rules.maximum_bet), perSubmit: rupees(rules.maximum_submit) })}
+            </p>
+          )}
           {(Object.keys(BET_TYPES) as BetType[]).map((type) => {
             const info = BET_TYPES[type];
             const example = info.inputType === 'digit' ? '7' : info.inputType === 'jodi' ? '42' : '123-6';
-            return <div key={type} className="border-t border-slate-800 pt-3">
-              <p className="text-sm font-medium">{info.label} · {info.multiplier}×</p>
-              <p className="text-xs text-slate-400">{info.description} Format: {info.placeholder}. Example: {example}; a 10 balance stake has a potential win of {10 * info.multiplier}.</p>
-            </div>;
+            return (
+              <div key={type} className="border-t border-surface-border pt-3">
+                <p className="text-sm font-semibold text-ink-strong">{t(`bet.name.${type}` as TranslationKey)} · {info.multiplier}×</p>
+                <p className="mt-0.5 text-sm text-ink-muted">
+                  {t(`bet.desc.${type}` as TranslationKey)}{' '}
+                  {interpolate(t('rules.example'), { example, win: rupees(10 * info.multiplier) })}
+                </p>
+              </div>
+            );
           })}
-        </section>
-        <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-semibold">Game schedules</h2>
-          {error && <p className="text-sm text-rose-300">{error}{errorDetails && ` ${errorDetails}`}</p>}
-          {statuses.map((status) => <div key={status.game} className="border-t border-slate-800 pt-3 text-sm">
-            <p className="font-medium">{status.label || GAME_LABELS[status.game]}</p>
-            <p className="text-xs text-slate-400">Opens {status.bets_open_at} IST · open picks close {status.open_bets_close_at} IST · close picks close {status.close_bets_close_at} IST</p>
-          </div>)}
-        </section>
-        <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-300">
-          <h2 className="font-semibold text-white">Play and withdrawals</h2>
-          {rulesError && <p className="text-xs text-rose-300">{rulesError}</p>}
-          <p>Results are posted by the operator. Picks lock after submission and cannot be edited.</p>
-          <p>Play balance is used first; remaining stake is taken from the wallet. Winnings are credited to the wallet.</p>
-          {rules ? <p>Withdrawals require at least {rules.approved_deposit_minimum} in approved deposits and wagering turnover equal to {rules.turnover_multiplier}× approved deposits. The minimum request is {rules.minimum_withdrawal} and the maximum is {rules.maximum_withdrawal}; only one withdrawal may be pending at a time.</p> : !rulesError ? <p className="text-xs text-slate-400">Loading withdrawal rules…</p> : null}
-          <p>To report a disputed result or transaction, use Help → Report a problem and include the relevant request when possible.</p>
-        </section>
-      </div>
-    </main>
+        </Card>
+        <Card className="space-y-3">
+          <h2 className="font-semibold text-ink-strong">{t('rules.schedules')}</h2>
+          {error && <Alert details={errorDetails} onRetry={() => void refresh()}>{error}</Alert>}
+          {statuses.map((status) => (
+            <div key={status.game} className="border-t border-surface-border pt-3 text-sm">
+              <p className="font-semibold text-ink-strong">{status.label || GAME_LABELS[status.game]}</p>
+              <p className="mt-0.5 text-ink-muted">
+                {interpolate(t('rules.schedule'), {
+                  opens: formatClockTime(status.bets_open_at),
+                  openClose: formatClockTime(status.open_bets_close_at),
+                  closeClose: formatClockTime(status.close_bets_close_at),
+                })}
+              </p>
+            </div>
+          ))}
+        </Card>
+        <Card className="space-y-3 text-sm text-ink-soft">
+          <h2 className="font-semibold text-ink-strong">{t('rules.moneyTitle')}</h2>
+          <p>{t('rules.results')}</p>
+          <p>{t('rules.balanceOrder')}</p>
+          {rules && (
+            <p>
+              {interpolate(t('rules.withdrawals'), {
+                deposit: rupees(rules.approved_deposit_minimum),
+                multiplier: rules.turnover_multiplier,
+                min: rupees(rules.minimum_withdrawal),
+                max: rupees(rules.maximum_withdrawal),
+              })}
+            </p>
+          )}
+          <p>{t('rules.disputes')}</p>
+        </Card>
+      </main>
+    </div>
   );
 }

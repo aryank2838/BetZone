@@ -164,8 +164,8 @@ function RequestFilters({ filter, onChange, onSearch, searchPlaceholder }: {
       <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
       <input value={filter.search} onChange={(event) => onChange({ ...filter, search: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') onSearch(); }} placeholder={searchPlaceholder} className="w-full rounded-lg border border-slate-700 bg-slate-800 py-2 pl-7 pr-2 text-xs text-white" />
     </div>
-    <label className="text-[10px] text-slate-400">From (IST)<input type="date" value={filter.from} onChange={(event) => onChange({ ...filter, from: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white" /></label>
-    <label className="text-[10px] text-slate-400">To (IST)<input type="date" value={filter.to} onChange={(event) => onChange({ ...filter, to: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white" /></label>
+    <label className="text-xs text-slate-400">From (IST)<input type="date" value={filter.from} onChange={(event) => onChange({ ...filter, from: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white" /></label>
+    <label className="text-xs text-slate-400">To (IST)<input type="date" value={filter.to} onChange={(event) => onChange({ ...filter, to: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white" /></label>
     <button type="button" onClick={onSearch} className="col-span-2 rounded-lg bg-slate-700 py-2 text-xs font-medium text-white hover:bg-slate-600">Apply filters</button>
   </div>;
 }
