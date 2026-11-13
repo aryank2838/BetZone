@@ -14,6 +14,7 @@ import SettingsPage from '@/components/SettingsPage';
 import LegalPage from '@/components/LegalPage';
 import GameCard from '@/components/GameCard';
 import PlayLimitsSummary from '@/components/PlayLimitsSummary';
+import AdminHomeCard from '@/components/AdminHomeCard';
 import BottomNav, { type TabView } from '@/components/BottomNav';
 import Alert from '@/components/ui/Alert';
 import { SectionTitle } from '@/components/ui/Card';
@@ -37,7 +38,7 @@ const TAB_FOR_VIEW: Partial<Record<NavView, TabView>> = {
 export default function Dashboard() {
   const { user, profile, refreshProfile } = useAuth();
   const { nav, navigate, goHome } = useNav();
-  const [adminInitialTab, setAdminInitialTab] = useState<'stats' | 'settings'>('stats');
+  const [adminInitialTab, setAdminInitialTab] = useState<'stats' | 'settings' | 'requests'>('stats');
   const { t } = useT();
 
   const goTo = (view: NavView, game: Game | null = null) => {
@@ -64,7 +65,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> {t('common.loading')}</div>
         </div>
       }>
-        <AdminPanel onBack={() => { setAdminInitialTab('stats'); goTo('settings'); }} initialTab={adminInitialTab} />
+        <AdminPanel onBack={() => { setAdminInitialTab('stats'); goHome(); }} initialTab={adminInitialTab} />
       </Suspense>
     );
   }
@@ -87,7 +88,7 @@ export default function Dashboard() {
   } else if (nav.view === 'settings' && user) {
     page = <SettingsPage onNavigate={(view) => goTo(view)} />;
   } else {
-    page = <Home onNavigate={goTo} />;
+    page = <Home onNavigate={goTo} onOpenAdmin={(tab) => { setAdminInitialTab(tab); goTo('admin'); }} />;
   }
 
   const activeTab = TAB_FOR_VIEW[nav.view] ?? 'home';
@@ -99,7 +100,7 @@ export default function Dashboard() {
   );
 }
 
-function Home({ onNavigate }: { onNavigate: (view: NavView, game?: Game | null) => void }) {
+function Home({ onNavigate, onOpenAdmin }: { onNavigate: (view: NavView, game?: Game | null) => void; onOpenAdmin: (tab: 'stats' | 'requests') => void }) {
   const { formatNumber } = useFormat();
   const { user, profile } = useAuth();
   const { t } = useT();
@@ -180,6 +181,7 @@ function Home({ onNavigate }: { onNavigate: (view: NavView, game?: Game | null) 
       </header>
 
       <main className="relative z-10 mx-auto max-w-2xl space-y-6 px-4 py-6 sm:px-5">
+        {profile?.is_admin && <AdminHomeCard onOpen={onOpenAdmin} />}
         {gameStatusError && (
           <Alert details={gameStatusErrorDetails} onRetry={() => void refreshGameStatus()}>
             {t('dashboard.scheduleError')} {gameStatusError}
