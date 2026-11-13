@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { useFormat } from '@/i18n/useFormat';
@@ -36,7 +36,34 @@ export default function WithdrawalForm({ status, onSubmitted, onSubmittingChange
   const toast = useToast();
   const [amount, setAmount] = useState('');
   const [upiId, setUpiId] = useState('');
+  const [prefilledUpi, setPrefilledUpi] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Fill in the UPI ID from the player's last paid withdrawal, so they don't
+  // retype it (and risk a typo) every time. Rejected requests are skipped in
+  // case the UPI ID was the reason.
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const { data, error: queryError } = await supabase
+          .from('withdrawals')
+          .select('upi_id')
+          .eq('status', 'approved')
+          .not('upi_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const saved = (data as { upi_id?: string | null } | null)?.upi_id ?? '';
+        if (!active || queryError || !saved) return;
+        setPrefilledUpi(saved);
+        setUpiId((current) => current || saved);
+      } catch {
+        // Pre-filling is a convenience; the player can always type it.
+      }
+    })();
+    return () => { active = false; };
+  }, []);
   const [error, setError] = useState<{ text: string; raw?: string } | null>(null);
   const rupees = (value: number) => `₹${formatNumber(value)}`;
 
@@ -85,7 +112,6 @@ export default function WithdrawalForm({ status, onSubmitted, onSubmittingChange
       });
       if (rpcError) throw rpcError;
       setAmount('');
-      setUpiId('');
       toast.show(t('withdraw.sent'));
       await onSubmitted();
     } catch (caught) {
@@ -129,8 +155,14 @@ export default function WithdrawalForm({ status, onSubmitted, onSubmittingChange
           value={upiId}
           onChange={(event) => { setUpiId(event.target.value); setError(null); }}
           placeholder="yourname@upi"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           className={INPUT}
         />
+        {prefilledUpi && upiId === prefilledUpi && (
+          <p className="mt-1.5 text-xs text-ink-muted">{t('withdraw.upiSaved')}</p>
+        )}
       </div>
       {error && <Alert details={error.raw}>{error.text}</Alert>}
       <Button

@@ -14,7 +14,7 @@ import WithdrawalForm, { type WalletStatus } from '@/components/WithdrawalForm';
 import ToastProvider from '@/components/ui/ToastProvider';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
-import { useT } from '@/i18n/useT';
+import { interpolate, useT } from '@/i18n/useT';
 
 export function Gate() {
   const { user, profile, profileError, profileErrorDetails, loading, refreshProfile, passwordRecovery, inactivityWarning, signOut } = useAuth();
@@ -53,8 +53,8 @@ export function Gate() {
     return <TermsAcceptance onAccepted={refreshProfile} onSignOut={signOut} updated={!!profile.terms_accepted_at} />;
   }
   return <>{user ? <Dashboard /> : <AuthScreen />}{inactivityWarning !== null && (
-    <div role="status" className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] left-1/2 z-[80] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-950 px-4 py-3 text-sm text-amber-100 shadow-xl">
-      You will be signed out for inactivity in {inactivityWarning} seconds. Interact with the page to stay signed in.
+    <div role="status" className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-[80] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-control border border-amber-700 bg-amber-950 px-4 py-3 text-sm text-amber-100 shadow-xl">
+      {interpolate(t('app.inactivity'), { seconds: inactivityWarning })}
     </div>
   )}</>;
 }
@@ -69,6 +69,7 @@ export function TermsAcceptance({ onAccepted, onSignOut, updated = false }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [document, setDocument] = useState<LegalDocument | null>(null);
+  const { t } = useT();
   const dialogRef = useRef<HTMLElement>(null);
   const keepOpen = useCallback(() => {}, []);
   useDialogA11y(!document, dialogRef, keepOpen);
@@ -87,25 +88,26 @@ export function TermsAcceptance({ onAccepted, onSignOut, updated = false }: {
   };
   if (document) return <LegalPage document={document} onBack={() => setDocument(null)} />;
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/95 p-5 text-slate-100">
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="terms-required-title" className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-6">
-        <h1 id="terms-required-title" className="text-xl font-bold">{updated ? 'Our terms have been updated' : 'Confirm your age and accept the terms'}</h1>
-        {updated && <p className="text-sm text-amber-200">The Terms and Privacy Policy have changed since you last accepted them. Please review and accept the new version to continue.</p>}
-        <p className="text-sm text-slate-300">You must confirm that you are 18 or older and accept the Terms and Privacy Policy to continue using the app.</p>
-        <nav className="flex gap-4 text-sm text-cyan-300 underline">
-          <button type="button" onClick={() => setDocument('terms')}>Terms</button><button type="button" onClick={() => setDocument('privacy')}>Privacy Policy</button>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-surface-page/95 p-4 text-ink">
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="terms-required-title" className="my-auto w-full max-w-lg space-y-4 rounded-card border border-surface-strong bg-surface p-6">
+        <h1 id="terms-required-title" className="text-xl font-bold text-ink-strong">{updated ? t('terms.updatedTitle') : t('terms.title')}</h1>
+        {updated && <Alert tone="warning">{t('terms.updatedBody')}</Alert>}
+        <p className="text-sm text-ink-soft">{t('terms.body')}</p>
+        <nav className="flex gap-2 text-sm">
+          <Button variant="ghost" className="text-accent-300 underline" onClick={() => setDocument('terms')}>{t('auth.terms')}</Button>
+          <Button variant="ghost" className="text-accent-300 underline" onClick={() => setDocument('privacy')}>{t('auth.privacy')}</Button>
         </nav>
-        <label className="flex items-start gap-2 text-sm text-slate-200">
-          <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} className="mt-1 accent-emerald-500" />
-          <span>I am 18 or older and I accept the Terms and Privacy Policy.</span>
+        <label className="flex min-h-tap cursor-pointer items-start gap-3 rounded-control border border-surface-strong bg-surface-raised/50 p-3 text-sm text-ink">
+          <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-500" />
+          <span>{t('terms.checkbox')}</span>
         </label>
-        {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
-        <button type="button" disabled={!checked || busy} onClick={() => void accept()} className="w-full rounded-lg bg-emerald-600 py-3 text-sm font-semibold disabled:opacity-40">{busy ? 'Saving…' : 'Accept and continue'}</button>
-        <div className="flex items-center justify-between gap-3 border-t border-slate-800 pt-4 text-sm">
-          <p className="text-xs text-slate-400">Don't want to accept? You can still withdraw your own balance, sign out, or contact support.</p>
+        {error && <Alert>{error}</Alert>}
+        <Button size="lg" fullWidth loading={busy} disabled={!checked} onClick={() => void accept()}>{t('terms.accept')}</Button>
+        <div className="flex flex-col gap-3 border-t border-surface-border pt-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-ink-muted">{t('terms.decline')}</p>
           <div className="flex shrink-0 items-center gap-2">
             <HelpButton />
-            <button type="button" onClick={() => void onSignOut()} className="tap-target rounded-lg border border-slate-700 px-3 py-2 text-slate-200 hover:bg-slate-800">Log out</button>
+            <Button variant="secondary" onClick={() => void onSignOut()}>{t('common.logout')}</Button>
           </div>
         </div>
         <DeclinedTermsWithdrawal />
@@ -117,6 +119,7 @@ export function TermsAcceptance({ onAccepted, onSignOut, updated = false }: {
 // A8: withdrawals do not require accepted terms, so users who decline can still
 // take out their own eligible balance (ban, turnover and limits still apply).
 function DeclinedTermsWithdrawal() {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<WalletStatus | null>(null);
   const [error, setError] = useState('');
@@ -132,15 +135,15 @@ function DeclinedTermsWithdrawal() {
   }, []);
   if (!open) {
     return (
-      <button type="button" onClick={() => { setOpen(true); void loadStatus(); }} className="text-sm text-cyan-300 underline">
-        Withdraw my balance instead
-      </button>
+      <Button variant="ghost" className="text-accent-300 underline" onClick={() => { setOpen(true); void loadStatus(); }}>
+        {t('terms.withdrawInstead')}
+      </Button>
     );
   }
   return (
-    <div className="space-y-2 border-t border-slate-800 pt-4">
-      <h2 className="text-sm font-semibold">Withdraw your balance</h2>
-      {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
+    <div className="space-y-3 border-t border-surface-border pt-4">
+      <h2 className="text-sm font-semibold text-ink-strong">{t('terms.withdrawTitle')}</h2>
+      {error && <Alert>{error}</Alert>}
       <WithdrawalForm status={status} onSubmitted={loadStatus} />
     </div>
   );

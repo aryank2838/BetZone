@@ -62,6 +62,27 @@ afterEach(() => {
 });
 
 describe('selection bet slip', () => {
+  it('keeps picks when the player looks at another bet type', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+    supabaseFromMock.mockReturnValue(makeSelectionQuery());
+    render(<SelectionScreen game="test" onBack={vi.fn()} onPointsChanged={vi.fn()} onAddFunds={vi.fn()} />);
+
+    await screen.findByRole('button', { name: '00' });
+    fireEvent.click(screen.getByRole('button', { name: '00' }));
+    fireEvent.click(screen.getByRole('button', { name: '01' }));
+    expect(screen.getByText(/2 numbers/)).toBeInTheDocument();
+
+    // Switch to Single Open, add a pick there, and see the Jodi picks still waiting.
+    fireEvent.click(screen.getByRole('tab', { name: /^Open/ }));
+    expect(screen.getByRole('tab', { name: /Jodi/ })).toHaveTextContent('2');
+    fireEvent.click(await screen.findByRole('button', { name: '7' }));
+    expect(screen.getByText('Also waiting: Jodi (2)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Jodi/ }));
+    expect(screen.getByText(/2 numbers/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '00' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('shows totals and after-bet balances, then keeps server errors in the modal', async () => {
     rpcMock.mockImplementation((name: string) => {
       if (name === 'get_latest_results') return Promise.resolve({ data: null, error: null });

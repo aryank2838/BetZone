@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { reportError } from '@/lib/monitoring';
+import { translate } from '@/i18n/context';
 
 interface Props {
   children: ReactNode;
@@ -23,12 +24,12 @@ export default class AppErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.failed) {
       return (
-        <main className="flex min-h-screen items-center justify-center bg-slate-950 px-5 text-slate-100">
+        <main className="flex min-h-screen items-center justify-center bg-surface-page px-5 text-ink">
           <section className="max-w-sm space-y-4 text-center">
-            <h1 className="text-xl font-bold">Something went wrong</h1>
-            <p className="text-sm text-slate-400">The app hit an unexpected error. Reload to try again.</p>
-            <button type="button" onClick={() => window.location.reload()} className="min-h-11 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white">
-              Reload
+            <h1 className="text-xl font-bold text-ink-strong">{translate('crash.title')}</h1>
+            <p className="text-sm text-ink-muted">{translate('crash.body')}</p>
+            <button type="button" onClick={() => window.location.reload()} className="min-h-tap rounded-control bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-500">
+              {translate('crash.reload')}
             </button>
           </section>
         </main>

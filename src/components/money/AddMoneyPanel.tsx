@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { AlertCircle, Check, Copy, Smartphone, Upload, X } from 'lucide-react';
+import { AlertCircle, Check, Copy, Loader2, Smartphone, Upload, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { formatLimitEnd } from '@/lib/useMyLimits';
+import { MAX_ORIGINAL_BYTES, MAX_UPLOAD_BYTES, shrinkImage } from '@/lib/shrinkImage';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -46,6 +47,7 @@ export default function AddMoneyPanel({
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<{ text: string; raw?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,14 +94,22 @@ export default function AddMoneyPanel({
     }
   };
 
-  const handleScreenshotSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+  const handleScreenshotSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const original = event.target.files?.[0];
+    event.target.value = ''; // allow choosing the same photo again after removing it
+    if (!original) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(original.type)) {
       setError({ text: t('money.photoType') });
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (original.size > MAX_ORIGINAL_BYTES) {
+      setError({ text: t('money.photoSize') });
+      return;
+    }
+    setPreparingPhoto(true);
+    const file = await shrinkImage(original);
+    setPreparingPhoto(false);
+    if (file.size > MAX_UPLOAD_BYTES) {
       setError({ text: t('money.photoSize') });
       return;
     }
@@ -234,7 +244,7 @@ export default function AddMoneyPanel({
 
         <div>
           <StepLabel step={3} required>{t('money.screenshot')}</StepLabel>
-          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleScreenshotSelect} className="hidden" aria-label={t('money.screenshot')} />
+          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { void handleScreenshotSelect(event); }} className="hidden" aria-label={t('money.screenshot')} />
           {screenshotPreview ? (
             <div className="relative overflow-hidden rounded-control border border-surface-strong">
               <img src={screenshotPreview} alt={t('money.screenshot')} className="max-h-48 w-full object-cover" />
@@ -254,10 +264,12 @@ export default function AddMoneyPanel({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex w-full flex-col items-center gap-2 rounded-control border-2 border-dashed border-surface-strong py-6 text-ink-muted transition-colors hover:border-brand-700 hover:text-ink-soft"
+              disabled={preparingPhoto}
+              aria-busy={preparingPhoto || undefined}
+              className="flex w-full flex-col items-center gap-2 rounded-control border-2 border-dashed border-surface-strong py-6 text-ink-muted transition-colors hover:border-brand-700 hover:text-ink-soft disabled:cursor-wait"
             >
-              <Upload className="h-5 w-5" aria-hidden="true" />
-              <span className="text-sm">{t('money.tapToAdd')}</span>
+              {preparingPhoto ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : <Upload className="h-5 w-5" aria-hidden="true" />}
+              <span className="text-sm">{preparingPhoto ? t('money.preparingPhoto') : t('money.tapToAdd')}</span>
             </button>
           )}
         </div>

@@ -4,7 +4,8 @@ import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { Loader2, Zap, ArrowRight, Trophy, Wallet, TrendingUp } from 'lucide-react';
 import LegalPage, { type LegalDocument } from '@/components/LegalPage';
 import LanguageSelector from '@/components/LanguageSelector';
-import { useT } from '@/i18n/useT';
+import PasswordInput from '@/components/ui/PasswordInput';
+import { interpolate, useT } from '@/i18n/useT';
 
 type Mode = 'signup' | 'login';
 import { TERMS_VERSION } from '@/lib/terms';
@@ -68,7 +69,7 @@ export default function AuthScreen() {
       return;
     }
     if (isSignup && Date.now() < nextConfirmationEmailAt.current) {
-      setError(`Please wait ${resendCooldown} seconds before requesting another confirmation email.`);
+      setError(interpolate(t('auth.resendWait'), { seconds: resendCooldown }));
       return;
     }
 
@@ -272,9 +273,8 @@ export default function AuthScreen() {
             <label htmlFor="password" className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wide">
               {t('auth.password')}
             </label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder=              {isSignup ? t('settings.newPassword') : t('auth.password')}
@@ -314,13 +314,13 @@ export default function AuthScreen() {
               disabled={busy || resendCooldown > 0 || !confirmationEmail}
               className="min-h-[44px] w-full text-sm text-cyan-400 hover:text-cyan-300 disabled:text-slate-400 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {resendCooldown > 0 ? `Resend email (${resendCooldown}s)` : 'Resend email'}
+              {resendCooldown > 0 ? interpolate(t('auth.resendIn'), { seconds: resendCooldown }) : t('auth.resend')}
             </button>
           )}
         </form>
 
         <p className="text-xs text-slate-400 text-center mt-7">
-          Confirm your email to receive 10 starter points.
+          {t('auth.starterBonus')}
         </p>
         <nav className="mt-4 flex justify-center gap-4 text-xs text-slate-400">
           <button type="button" onClick={() => setLegalDocument('terms')} className="underline hover:text-slate-300">{t('auth.terms')}</button>

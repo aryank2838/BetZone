@@ -63,7 +63,15 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
   const betLimits = useBetLimits();
   const [tab, setTab] = useState<Tab>('jodi');
   const [lockedByType, setLockedByType] = useState<Record<string, Map<string, number>>>({});
-  const [pending, setPending] = useState<PendingPick[]>([]);
+  // One slip per bet type, so looking at another type never loses picks.
+  const [slips, setSlips] = useState<Partial<Record<Tab, PendingPick[]>>>({});
+  const pending = slips[tab] ?? [];
+  const setPending = useCallback((update: PendingPick[] | ((previous: PendingPick[]) => PendingPick[])) => {
+    setSlips((current) => {
+      const previous = current[tab] ?? [];
+      return { ...current, [tab]: typeof update === 'function' ? update(previous) : update };
+    });
+  }, [tab]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{
@@ -157,7 +165,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
   useEffect(() => {
     const roundDate = status?.round_date ?? null;
     if (previousRound.current && roundDate && previousRound.current !== roundDate) {
-      setPending([]);
+      setSlips({});
       setLockedByType({});
     }
     previousRound.current = roundDate;
@@ -173,10 +181,16 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
       if (status.close_bets_open) return 'single_close';
       return current;
     });
+    // Picks for a bet window that has closed can no longer be placed.
+    setSlips((current) => {
+      const open = (type: Tab) => (isCloseBet(type) ? status.close_bets_open : status.open_bets_open);
+      const entries = Object.entries(current) as Array<[Tab, PendingPick[]]>;
+      return entries.every(([type]) => open(type)) ? current : Object.fromEntries(entries.filter(([type]) => open(type)));
+    });
   }, [status]);
 
+  // Switching bet type keeps every slip; only the half-typed patti is cleared.
   useEffect(() => {
-    setPending([]);
     setManualPatti('');
     setManualDigit('');
     setMessage(null);
@@ -244,6 +258,8 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
   const invalidEntry = pendingSorted.some((p) => !validStake(p.points));
   const exceedsSubmitLimit = newTotal > betLimits.maxPerSubmit;
   const slipVisible = betOpen && pendingSorted.length > 0;
+  const otherSlips = (Object.entries(slips) as Array<[Tab, PendingPick[]]>).filter(([type, picks]) => type !== tab && picks.length > 0);
+  const slipCount = Object.values(slips).reduce((sum, picks) => sum + (picks?.length ?? 0), 0);
 
   const handleSave = async () => {
     if (submittingRef.current) return;
@@ -320,7 +336,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
     <div className={`min-h-screen bg-surface-page text-ink ${slipVisible ? 'pb-[calc(7rem+env(safe-area-inset-bottom))]' : 'pb-8'}`}>
       <PageHeader
         title={gameName}
-        subtitle={interpolate(t('bet.headerCounts'), { placed: lockedCount, slip: pending.length })}
+        subtitle={interpolate(t('bet.headerCounts'), { placed: lockedCount, slip: slipCount })}
         onBack={onBack}
         actions={(
           <>
@@ -418,10 +434,16 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
                 aria-selected={selected}
                 onClick={() => setTab(item.id)}
                 disabled={typeClosed}
-                className={`flex min-h-[52px] flex-1 flex-col items-center justify-center whitespace-nowrap rounded-control px-3 text-sm font-semibold transition-colors ${
+                className={`relative flex min-h-[52px] flex-1 flex-col items-center justify-center whitespace-nowrap rounded-control px-3 text-sm font-semibold transition-colors ${
                   selected ? TAB_ACTIVE[item.color] : 'text-ink-muted hover:bg-surface-raised hover:text-ink-soft'
                 } disabled:cursor-not-allowed disabled:opacity-40`}
               >
+                {(slips[item.id]?.length ?? 0) > 0 && (
+                  <span className="absolute right-1 top-1 min-w-[18px] rounded-full bg-amber-400 px-1 text-[11px] font-bold leading-[18px] text-slate-950">
+                    {slips[item.id]!.length}
+                    <span className="sr-only"> {t('bet.inSlip')}</span>
+                  </span>
+                )}
                 <span>{t(item.label)}</span>
                 <span className={`text-xs font-medium ${selected ? 'text-white/80' : 'text-ink-muted'}`}>{BET_TYPES[item.id].multiplier}×</span>
               </button>
@@ -613,6 +635,11 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
                   {interpolate(t(pendingSorted.length === 1 ? 'bet.slipOne' : 'bet.slipMany'), { count: pendingSorted.length })} · {rupees(newTotal)}
                 </p>
                 <p className="truncate text-xs text-ink-muted">{t(`bet.name.${tab}` as TranslationKey)}</p>
+                {otherSlips.length > 0 && (
+                  <p className="truncate text-xs text-amber-300">
+                    {interpolate(t('bet.otherSlips'), { list: otherSlips.map(([type, picks]) => `${t(`bet.name.${type}` as TranslationKey)} (${picks.length})`).join(', ') })}
+                  </p>
+                )}
               </div>
               <Button
                 size="lg"

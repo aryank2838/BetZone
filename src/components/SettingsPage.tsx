@@ -10,6 +10,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Card, SectionTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
+import PasswordInput from '@/components/ui/PasswordInput';
 import { useToast } from '@/components/ui/toastContext';
 import { useT } from '@/i18n/useT';
 
@@ -90,8 +91,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (view: NavVie
 
         <Card className="space-y-3">
           <SectionTitle>{t('settings.password')}</SectionTitle>
-          <input type="password" autoComplete="current-password" aria-label={t('settings.currentPassword')} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder={t('settings.currentPassword')} className={INPUT} />
-          <input type="password" autoComplete="new-password" aria-label={t('settings.newPassword')} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder={t('settings.newPassword')} className={INPUT} />
+          <PasswordInput autoComplete="current-password" aria-label={t('settings.currentPassword')} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder={t('settings.currentPassword')} className={INPUT} />
+          <PasswordInput autoComplete="new-password" aria-label={t('settings.newPassword')} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder={t('settings.newPassword')} className={INPUT} />
           <Button variant="secondary" loading={busy === 'password'} disabled={busy !== null} onClick={() => void changePassword()}>{t('settings.password')}</Button>
         </Card>
 
