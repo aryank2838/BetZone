@@ -117,7 +117,7 @@ export function TermsAcceptance({ onAccepted, onSignOut, updated = false }: {
 }
 
 // A8: withdrawals do not require accepted terms, so users who decline can still
-// take out their own eligible balance (ban, turnover and limits still apply).
+// take out their own eligible balance (ban and limits still apply).
 function DeclinedTermsWithdrawal() {
   const { t } = useT();
   const [open, setOpen] = useState(false);

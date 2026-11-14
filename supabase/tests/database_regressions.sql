@@ -673,20 +673,8 @@ BEGIN
     RAISE EXCEPTION 'withdrawal minimum was not enforced: %', v_error;
   END IF;
 
-  v_error := NULL;
-  BEGIN
-    PERFORM public.request_withdrawal(100, 'user@bank');
-  EXCEPTION WHEN OTHERS THEN
-    GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT;
-  END;
-  SELECT 100 - COALESCE(SUM(-delta), 0) INTO v_count
-  FROM public.point_ledger WHERE user_id = v_user2 AND reason = 'selection_submit';
-  IF v_error IS NULL OR v_error NOT ILIKE format('Wager %s more points before withdrawing.%%', v_count) THEN
-    RAISE EXCEPTION 'deposit turnover requirement was not enforced (expected % remaining): %', v_count, v_error;
-  END IF;
-
-  INSERT INTO public.point_ledger (user_id, delta, reason)
-  VALUES (v_user2, -100, 'selection_submit');
+  -- No turnover rule: winnings in the wallet can be withdrawn without first
+  -- betting the deposited amount (turnover_multiplier = 0).
   PERFORM public.request_withdrawal(100, 'user@bank');
   SELECT id INTO v_withdrawal_id
   FROM public.withdrawals
@@ -793,7 +781,7 @@ BEGIN
      OR (v_result->>'maximum_withdrawal')::integer <> 100000
      OR (v_result->>'approved_deposit_minimum')::integer <> 100
      OR (v_result->>'maximum_add_funds')::integer <> 100000
-     OR (v_result->>'turnover_multiplier')::integer <> 1
+     OR (v_result->>'turnover_multiplier')::integer <> 0
      OR (v_result->>'maximum_bet')::integer <> 5000
      OR (v_result->>'maximum_submit')::integer <> 20000 THEN
     RAISE EXCEPTION 'public rules differ from shared internal constants: %', v_result;

@@ -88,7 +88,6 @@ export default function RulesPage({ onBack }: { onBack: () => void }) {
             <p>
               {interpolate(t('rules.withdrawals'), {
                 deposit: rupees(rules.approved_deposit_minimum),
-                multiplier: rules.turnover_multiplier,
                 min: rupees(rules.minimum_withdrawal),
                 max: rupees(rules.maximum_withdrawal),
               })}
