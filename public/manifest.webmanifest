@@ -2,7 +2,7 @@
   "id": "/",
   "name": "BetZone",
   "short_name": "BetZone",
-  "description": "Play Kalyan and Main Bazaar with secure, server-enforced balance and results.",
+  "description": "Play Kalyan, Main Bazaar, Milan Day and Milan Night with secure, server-enforced balance and results.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

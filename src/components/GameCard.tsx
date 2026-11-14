@@ -16,6 +16,7 @@ const PHASE: Record<GamePhase, { tone: BadgeTone; label: TranslationKey; border:
   closing: { tone: 'warning', label: 'game.phaseClosing', border: 'border-amber-700/70' },
   closed: { tone: 'neutral', label: 'game.phaseClosed', border: 'border-surface-border' },
   holiday: { tone: 'warning', label: 'game.phaseHoliday', border: 'border-amber-900/60 border-dashed' },
+  dayOff: { tone: 'neutral', label: 'game.phaseDayOff', border: 'border-surface-border border-dashed' },
 };
 
 export default function GameCard({ status, result, nowMs, disabled, onOpen }: {
@@ -53,6 +54,11 @@ export default function GameCard({ status, result, nowMs, disabled, onOpen }: {
               <p>{interpolate(t('game.holiday'), { date: status.holiday_reopens_on ? formatHolidayDate(status.holiday_reopens_on) : '' })}</p>
               {status.holiday_note && <p className="mt-0.5 text-amber-200/80">{status.holiday_note}</p>}
             </div>
+          </div>
+        ) : phase === 'dayOff' ? (
+          <div className="flex items-start gap-2 text-sm text-ink-soft">
+            <CalendarOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p>{interpolate(t('game.dayOff'), { date: status.day_off_reopens_on ? formatHolidayDate(status.day_off_reopens_on) : '' })}</p>
           </div>
         ) : (
           <ul className="space-y-1.5">

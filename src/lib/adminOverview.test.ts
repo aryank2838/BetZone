@@ -44,6 +44,24 @@ describe('overdueResults', () => {
     expect(overdueResults([status(late)], {})).toEqual([]);
   });
 
+  it('expects no results for a weekly day off', () => {
+    // 2026-11-15 is a Sunday.
+    const sunday = status({ server_ist_date: '2026-11-15', server_ist_time: '18:00:00', closed_weekdays: [7] });
+    expect(overdueResults([sunday], { test: [] })).toEqual([]);
+  });
+
+  it('still expects Friday\'s after-midnight close result on Saturday, but not Saturday\'s on Sunday', () => {
+    const mainBazaar = {
+      open_result_at: '22:00:00', close_result_at: '00:10:00', close_result_next_day: true,
+      server_ist_time: '00:30:00', closed_weekdays: [6, 7],
+    };
+    // Saturday 00:30: Friday's (2026-11-13) close result is due.
+    const saturday = overdueResults([status({ ...mainBazaar, server_ist_date: '2026-11-14' })], { test: [] });
+    expect(saturday).toEqual([expect.objectContaining({ phase: 'close', roundDate: '2026-11-13' })]);
+    // Sunday 00:30: Saturday had no round.
+    expect(overdueResults([status({ ...mainBazaar, server_ist_date: '2026-11-15' })], { test: [] })).toEqual([]);
+  });
+
   it('lists the most overdue first', () => {
     const items = overdueResults([status({ server_ist_time: '18:00:00' })], { test: [] });
     expect(items.map((item) => item.phase)).toEqual(['open', 'close']);

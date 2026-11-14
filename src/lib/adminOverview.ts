@@ -1,4 +1,5 @@
 import type { BetType, Game, GameStatus } from '@/types';
+import { isClosedOn } from '@/lib/holiday';
 
 /** One round's posted result, as get_result_history returns it. */
 export interface ResultHistoryRow {
@@ -68,14 +69,17 @@ export function overdueResults(
     const round = (date: string) => rows.find((row) => row.round_date === date);
     const label = status.label || status.game;
 
-    if (status.server_ist_time >= status.open_result_at && !round(today)?.open_digit) {
+    // No round runs on a weekly day off, so no result is due for it.
+    const runs = (date: string) => !isClosedOn(date, status.closed_weekdays);
+
+    if (runs(today) && status.server_ist_time >= status.open_result_at && !round(today)?.open_digit) {
       overdue.push({
         game: status.game, label, phase: 'open', roundDate: today,
         dueAt: status.open_result_at, minutesLate: now - minutesOf(status.open_result_at),
       });
     }
     const closeRound = status.close_result_next_day ? addDays(today, -1) : today;
-    if (status.server_ist_time >= status.close_result_at && !round(closeRound)?.close_digit) {
+    if (runs(closeRound) && status.server_ist_time >= status.close_result_at && !round(closeRound)?.close_digit) {
       overdue.push({
         game: status.game, label, phase: 'close', roundDate: closeRound,
         dueAt: status.close_result_at, minutesLate: now - minutesOf(status.close_result_at),

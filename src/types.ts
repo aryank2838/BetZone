@@ -1,6 +1,6 @@
-export type Game = 'test' | 'test2';
+export type Game = 'test' | 'test2' | 'test3' | 'test4';
 
-export const GAME_LABELS: Record<Game, string> = { test: 'Kalyan', test2: 'Main Bazaar' };
+export const GAME_LABELS: Record<Game, string> = { test: 'Kalyan', test2: 'Main Bazaar', test3: 'Milan Day', test4: 'Milan Night' };
 
 export interface BetTypeInfo {
   label: string;
@@ -123,6 +123,12 @@ export interface GameStatus {
   on_holiday?: boolean;
   holiday_reopens_on?: string | null;
   holiday_note?: string | null;
+  /** Weekly days off as ISO weekdays: 1 = Monday ... 7 = Sunday. */
+  closed_weekdays?: number[];
+  /** Today (IST) is one of the game's weekly days off. */
+  day_off?: boolean;
+  /** Next date the game takes bets again, when today is a day off. */
+  day_off_reopens_on?: string | null;
 }
 
 export const isCloseBet = (betType: BetType) =>

@@ -39,4 +39,10 @@ describe('gamePhase', () => {
   it('is holiday when the game is on holiday', () => {
     expect(gamePhase(status({ on_holiday: true, holiday_reopens_on: '2026-11-20' }), NOW)).toBe('holiday');
   });
+
+  it('is dayOff on a weekly day off, and holiday wins over it', () => {
+    const sunday = { day_off: true, day_off_reopens_on: '2026-11-16', open_bets_open: false, close_bets_open: false };
+    expect(gamePhase(status(sunday), NOW)).toBe('dayOff');
+    expect(gamePhase(status({ ...sunday, on_holiday: true, holiday_reopens_on: '2026-11-20' }), NOW)).toBe('holiday');
+  });
 });

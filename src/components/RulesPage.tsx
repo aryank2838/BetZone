@@ -4,13 +4,14 @@ import { useGameStatus } from '@/lib/useGameStatus';
 import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
 import { formatClockTime } from '@/lib/countdown';
+import { weekdayNames } from '@/lib/holiday';
 import HelpButton from '@/components/HelpButton';
 import PageHeader from '@/components/ui/PageHeader';
 import Alert from '@/components/ui/Alert';
 import { Card } from '@/components/ui/Card';
 import { useFormat } from '@/i18n/useFormat';
 import { interpolate, useT } from '@/i18n/useT';
-import type { TranslationKey } from '@/i18n/context';
+import { localeFor, type TranslationKey } from '@/i18n/context';
 
 interface PublicRulesView {
   minimum_withdrawal: number;
@@ -23,7 +24,7 @@ interface PublicRulesView {
 
 export default function RulesPage({ onBack }: { onBack: () => void }) {
   const { statuses, error, errorDetails, refresh } = useGameStatus();
-  const { t } = useT();
+  const { t, language } = useT();
   const { formatNumber } = useFormat();
   const [rules, setRules] = useState<PublicRulesView | null>(null);
   const [rulesError, setRulesError] = useState<{ message: string; raw?: string } | null>(null);
@@ -77,6 +78,11 @@ export default function RulesPage({ onBack }: { onBack: () => void }) {
                   closeClose: formatClockTime(status.close_bets_close_at),
                 })}
               </p>
+              {!!status.closed_weekdays?.length && (
+                <p className="mt-0.5 text-ink-muted">
+                  {interpolate(t('rules.daysOff'), { days: weekdayNames(status.closed_weekdays, localeFor(language)) })}
+                </p>
+              )}
             </div>
           ))}
         </Card>

@@ -23,7 +23,7 @@ import { interpolate, useT } from '@/i18n/useT';
 import type { TranslationKey } from '@/i18n/context';
 import { calculateBetSlip } from '@/lib/betSlip';
 import { CalendarOff, Clock, Lock, Plus, ReceiptText, Trophy, X } from 'lucide-react';
-import { formatHolidayDate, isOnHoliday } from '@/lib/holiday';
+import { formatHolidayDate, isDayOff, isOnHoliday } from '@/lib/holiday';
 
 interface SelectionScreenProps {
   game: Game;
@@ -377,7 +377,12 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
             {t('bet.scheduleMissing')} {statusError ?? ''}
           </Alert>
         )}
-        {checkedStatus && status && !betOpen && !isOnHoliday(status) && !restriction && (
+        {checkedStatus && status && !isOnHoliday(status) && isDayOff(status) && (
+          <Alert tone="info">
+            <p className="flex items-center gap-1.5"><CalendarOff className="h-4 w-4" aria-hidden="true" />{interpolate(t('game.dayOff'), { date: status.day_off_reopens_on ? formatHolidayDate(status.day_off_reopens_on) : '' })}</p>
+          </Alert>
+        )}
+        {checkedStatus && status && !betOpen && !isOnHoliday(status) && !isDayOff(status) && !restriction && (
           <Alert tone="info">
             {interpolate(t('bet.closedInfo'), {
               opens: formatClockTime(status.bets_open_at),
@@ -392,7 +397,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
           </Alert>
         )}
 
-        {status && !isOnHoliday(status) && (
+        {status && !isOnHoliday(status) && !isDayOff(status) && (
           <ul className="space-y-1.5 px-1 text-sm">
             {([
               [t('game.openBets'), status.open_bets_open, status.open_bets_close_ts, status.open_bets_close_at],

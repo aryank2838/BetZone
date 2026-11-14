@@ -1,8 +1,8 @@
 import type { GameStatus } from '@/types';
 import { countdownTone } from '@/lib/countdown';
-import { isOnHoliday } from '@/lib/holiday';
+import { isDayOff, isOnHoliday } from '@/lib/holiday';
 
-export type GamePhase = 'holiday' | 'open' | 'closing' | 'closed';
+export type GamePhase = 'holiday' | 'dayOff' | 'open' | 'closing' | 'closed';
 
 /**
  * One overall status for a game card, from its two betting windows.
@@ -10,6 +10,7 @@ export type GamePhase = 'holiday' | 'open' | 'closing' | 'closed';
  */
 export function gamePhase(status: GameStatus, nowMs: number): GamePhase {
   if (isOnHoliday(status)) return 'holiday';
+  if (isDayOff(status)) return 'dayOff';
   const tones = [
     status.open_bets_open ? countdownTone(status.open_bets_close_ts, nowMs) : 'closed',
     status.close_bets_open ? countdownTone(status.close_bets_close_ts, nowMs) : 'closed',
