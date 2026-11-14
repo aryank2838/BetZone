@@ -7,6 +7,7 @@ import { useFormat } from '@/i18n/useFormat';
 import { interpolate, useT } from '@/i18n/useT';
 import { BET_TYPES, type Game, type GameStatus } from '@/types';
 import { formatClockTime } from '@/lib/countdown';
+import { useVisibleInterval } from '@/lib/useVisibleInterval';
 import { istToday, useAdminAlerts } from '@/lib/adminAlertsContext';
 import {
   biggestRisk, currentResultRound, overdueResults, unsettledExposure,
@@ -69,11 +70,8 @@ function useAdminOverview(statuses: GameStatus[]) {
   }, []);
 
   const statusesRef = useMemo(() => statuses, [scheduleKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    void load(statusesRef);
-    const timer = window.setInterval(() => { void load(statusesRef); }, 60_000);
-    return () => window.clearInterval(timer);
-  }, [load, statusesRef]);
+  useEffect(() => { void load(statusesRef); }, [load, statusesRef]);
+  useVisibleInterval(() => { void load(statusesRef); }, 60_000);
 
   return { history, today, risk, failed };
 }

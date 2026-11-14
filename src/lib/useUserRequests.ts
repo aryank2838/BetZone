@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { friendlyErrorDetails } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { useVisibleInterval } from '@/lib/useVisibleInterval';
 
 export interface UserRequest {
   id: string;
@@ -56,11 +57,7 @@ export function useUserRequests() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const hasPending = requests.some((request) => request.status === 'pending');
-  useEffect(() => {
-    if (!hasPending) return;
-    const timer = window.setInterval(() => { void refresh(); }, 20_000);
-    return () => window.clearInterval(timer);
-  }, [hasPending, refresh]);
+  useVisibleInterval(() => { void refresh(); }, 20_000, hasPending);
 
   return { requests, error, refresh };
 }

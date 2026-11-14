@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { friendlyErrorDetails } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
+import { useVisibleInterval } from '@/lib/useVisibleInterval';
 
 export interface MyLimits {
   daily_deposit_limit: number | null;
@@ -29,11 +30,8 @@ export function useMyLimits() {
     setLimits(data as MyLimits);
     setError(null);
   }, []);
-  useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => { void refresh(); }, 30_000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  useVisibleInterval(() => { void refresh(); }, 30_000);
   return { limits, error, refresh };
 }
 

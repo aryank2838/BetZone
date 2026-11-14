@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import type { GameStatus } from '@/types';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { correctedClockNow, serverClockOffset } from '@/lib/countdown';
+import { useVisibleInterval } from '@/lib/useVisibleInterval';
 
 export function useGameStatus() {
   const [statuses, setStatuses] = useState<GameStatus[]>([]);
@@ -44,18 +45,10 @@ export function useGameStatus() {
 
   useEffect(() => {
     void refresh();
-    const interval = window.setInterval(() => { void refresh(); }, 30_000);
     const clockInterval = window.setInterval(() => setClockNowMs(Date.now()), 1000);
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void refresh();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      window.clearInterval(interval);
-      window.clearInterval(clockInterval);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
+    return () => window.clearInterval(clockInterval);
   }, [refresh]);
+  useVisibleInterval(() => { void refresh(); }, 30_000);
 
   const nowMs = correctedClockNow(clockNowMs, offsetMs);
 

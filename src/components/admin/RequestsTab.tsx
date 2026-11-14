@@ -36,6 +36,8 @@ export interface AddFundsRequest {
   status: string;
   payment_ref: string;
   screenshot_path: string | null;
+  /** Set once the screenshot file was deleted (settled 30+ days ago). */
+  screenshot_removed_at?: string | null;
   created_at: string;
   processed_at: string | null;
   reject_reason: string | null;
@@ -106,7 +108,9 @@ export default function RequestsTab(props: RequestsTabProps) {
   const sortedAddFunds = useMemo(() => sortForReview(addFundsRequests), [addFundsRequests]);
   const sortedWithdrawals = useMemo(() => sortForReview(withdrawals), [withdrawals]);
   const thumbnailPaths = useMemo(
-    () => sortedAddFunds.flatMap((request) => (request.screenshot_path ? [request.screenshot_path] : [])),
+    () => sortedAddFunds.flatMap((request) => (
+      request.screenshot_path && !request.screenshot_removed_at ? [request.screenshot_path] : []
+    )),
     [sortedAddFunds],
   );
   const thumbnails = useScreenshotThumbnails(thumbnailPaths);
@@ -138,10 +142,11 @@ export default function RequestsTab(props: RequestsTabProps) {
           <div className="space-y-3">
             {sortedAddFunds.map((request) => {
               const thumbnail = request.screenshot_path ? thumbnails[request.screenshot_path] : undefined;
+              const screenshotRemoved = !!request.screenshot_removed_at;
               return (
                 <RequestCard key={request.id} pending={request.status === 'pending'}>
                   <div className="flex gap-3">
-                    {request.screenshot_path && (
+                    {request.screenshot_path && !screenshotRemoved && (
                       <button
                         type="button"
                         onClick={() => onViewScreenshot(request.screenshot_path!)}
@@ -165,7 +170,9 @@ export default function RequestsTab(props: RequestsTabProps) {
                         <CopyButton value={request.payment_ref} label="UTR" />
                       </div>
                       <RequestMeta request={request} now={now} />
-                      {!request.screenshot_path && <p className="text-xs text-amber-300">No screenshot attached</p>}
+                      {screenshotRemoved
+                        ? <p className="text-xs text-ink-muted">Screenshot deleted 30 days after this request was settled</p>
+                        : !request.screenshot_path && <p className="text-xs text-amber-300">No screenshot attached</p>}
                     </div>
                   </div>
                   {request.status === 'pending' ? (

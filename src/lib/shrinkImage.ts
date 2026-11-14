@@ -30,11 +30,12 @@ async function decode(file: File): Promise<{ source: CanvasImageSource; width: n
 
 /**
  * Shrinks a payment screenshot before upload so it goes up quickly on mobile
- * data. The longest side is capped at 2000px, which keeps UTR numbers and
+ * data and takes little space in storage. The longest side is capped at
+ * 1600px, which keeps UTR numbers and
  * amounts easy to read. Small files are left alone, and if anything fails
  * (old browser, unreadable image) the original file is returned unchanged.
  */
-export async function shrinkImage(file: File, { maxSide = 2000, quality = 0.85, skipBelowBytes = 500 * 1024 } = {}): Promise<File> {
+export async function shrinkImage(file: File, { maxSide = 1600, quality = 0.8, skipBelowBytes = 300 * 1024 } = {}): Promise<File> {
   try {
     const image = await decode(file);
     try {

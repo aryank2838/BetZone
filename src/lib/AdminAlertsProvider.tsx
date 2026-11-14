@@ -8,6 +8,8 @@ import {
   notificationState, playAlertSound, readSoundEnabled, requestNotificationPermission,
   showSystemNotification, writeSoundEnabled, type NotificationState,
 } from '@/lib/adminAlerts';
+import { useVisibleInterval } from '@/lib/useVisibleInterval';
+import { useScreenshotCleanup } from '@/lib/screenshotCleanup';
 import { AdminAlertsContext, istToday, type AdminAlertsValue, type PendingStats } from '@/lib/adminAlertsContext';
 
 const BASE_TITLE = 'BetZone';
@@ -43,16 +45,10 @@ export default function AdminAlertsProvider({ children, onOpenRequests }: { chil
     setFailed(false);
   }, []);
 
-  useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => { void refresh(); }, 60_000);
-    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(); };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  // Fallback poll; the live connection below keeps working in the background.
+  useVisibleInterval(() => { void refresh(); }, 60_000);
+  useScreenshotCleanup();
 
   useEffect(() => {
     let reloadTimer: number | undefined;
