@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gamePhase } from '@/lib/gameState';
+import { gamePhase, homeOrder, istClock } from '@/lib/gameState';
 import type { GameStatus } from '@/types';
 
 const NOW = Date.parse('2026-11-13T06:00:00Z');
@@ -40,9 +40,39 @@ describe('gamePhase', () => {
     expect(gamePhase(status({ on_holiday: true, holiday_reopens_on: '2026-11-20' }), NOW)).toBe('holiday');
   });
 
+  it('is later before betting opens today, and closed after betting ends', () => {
+    // NOW is 11:30 IST.
+    const shut = { open_bets_open: false, close_bets_open: false };
+    expect(gamePhase(status({ ...shut, bets_open_at: '12:00' }), NOW)).toBe('later');
+    expect(gamePhase(status({ ...shut, bets_open_at: '08:00' }), NOW)).toBe('closed');
+  });
+
   it('is dayOff on a weekly day off, and holiday wins over it', () => {
     const sunday = { day_off: true, day_off_reopens_on: '2026-11-16', open_bets_open: false, close_bets_open: false };
     expect(gamePhase(status(sunday), NOW)).toBe('dayOff');
     expect(gamePhase(status({ ...sunday, on_holiday: true, holiday_reopens_on: '2026-11-20' }), NOW)).toBe('holiday');
+  });
+});
+
+describe('istClock', () => {
+  it('gives IST wall-clock time', () => {
+    expect(istClock(NOW)).toBe('11:30');
+    expect(istClock(Date.parse('2026-11-13T18:40:00Z'))).toBe('00:10');
+  });
+});
+
+describe('homeOrder', () => {
+  it('puts closing games first, then open by soonest cutoff, then later, then closed and days off', () => {
+    const shut = { open_bets_open: false, close_bets_open: false };
+    const order = homeOrder([
+      status({ game: 'test', ...shut, bets_open_at: '08:00' }),                          // closed for today
+      status({ game: 'test2', open_bets_close_ts: inMinutes(300) }),                    // open, far cutoff
+      status({ game: 'test3', ...shut, bets_open_at: '21:00' }),                         // opens later
+      status({ game: 'test4', open_bets_close_ts: inMinutes(60) }),                     // open, nearer cutoff
+      status({ game: 'test5' as never, open_bets_open: false, close_bets_close_ts: inMinutes(5) }), // closing
+      status({ game: 'test6' as never, ...shut, day_off: true, day_off_reopens_on: '2026-11-16' }),
+    ], NOW);
+    expect(order.map((item) => item.status.game)).toEqual(['test5', 'test4', 'test2', 'test3', 'test', 'test6']);
+    expect(order.map((item) => item.group)).toEqual(['open', 'open', 'open', 'later', 'closed', 'closed']);
   });
 });

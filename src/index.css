@@ -101,3 +101,13 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Home screen: a game card whose betting closes in under 10 minutes. */
+@keyframes gameClosingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.18); }
+}
+.game-card-closing { animation: gameClosingPulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .game-card-closing { box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.22); }
+}

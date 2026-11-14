@@ -6,6 +6,7 @@ import type { Game, GameResult } from '@/types';
 import { useGameStatus } from '@/lib/useGameStatus';
 import { friendlyErrorDetails } from '@/lib/errors';
 import GameCard from '@/components/GameCard';
+import { homeOrder } from '@/lib/gameState';
 import PlayLimitsSummary from '@/components/PlayLimitsSummary';
 // The sign-in and terms screens already include LegalPage, so it stays in the main bundle.
 import LegalPage from '@/components/LegalPage';
@@ -172,6 +173,7 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
   const [resultsRefresh, setResultsRefresh] = useState(0);
   const { limits } = useMyLimits();
   const restriction = activePlayRestriction(limits);
+  const [gameFilter, setGameFilter] = useState<'all' | 'open'>('all');
 
   useEffect(() => {
     let active = true;
@@ -293,17 +295,52 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
 
         <section aria-labelledby="games-title" className="animate-slide-up">
           <SectionTitle id="games-title">{t('dashboard.games')}</SectionTitle>
-          <div className="space-y-4">
-            {gameStatusLoading ? <><CardSkeleton /><CardSkeleton /></> : gameStatuses.map((status) => (
-              <GameCard
-                key={status.game}
-                status={status}
-                result={results[status.game]}
-                nowMs={nowMs}
-                disabled={profile?.is_banned}
-                onOpen={() => onNavigate('game', status.game)}
-              />
-            ))}
+          {!gameStatusLoading && gameStatuses.length > 0 && (
+            <div className="mb-3 flex gap-2" role="group" aria-label={t('home.filterLabel')}>
+              {([['all', 'home.filterAll'], ['open', 'home.filterOpen']] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={gameFilter === value}
+                  onClick={() => setGameFilter(value)}
+                  className={`min-h-[36px] rounded-full border px-3.5 text-[13px] font-medium ${gameFilter === value
+                    ? 'border-brand-500 bg-brand-700 text-ink-strong'
+                    : 'border-surface-strong bg-surface-raised text-ink-soft hover:bg-surface-strong'}`}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="space-y-3">
+            {gameStatusLoading ? <><CardSkeleton /><CardSkeleton /></> : (() => {
+              const ordered = homeOrder(gameStatuses, nowMs);
+              const shown = gameFilter === 'open' ? ordered.filter((game) => game.group === 'open') : ordered;
+              if (gameStatuses.length > 0 && shown.length === 0) {
+                return (
+                  <p className="rounded-card border border-dashed border-surface-strong px-4 py-6 text-center text-sm text-ink-muted">
+                    {t('home.noneOpen')}
+                  </p>
+                );
+              }
+              return shown.map(({ status, phase, group }, index) => (
+                <div key={status.game} className="space-y-3">
+                  {(index === 0 || shown[index - 1].group !== group) && (
+                    <p className="px-0.5 pt-1 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-ink-muted">
+                      {t(group === 'open' ? 'home.groupOpen' : group === 'later' ? 'home.groupLater' : 'home.groupClosed')}
+                    </p>
+                  )}
+                  <GameCard
+                    status={status}
+                    phase={phase}
+                    result={results[status.game]}
+                    nowMs={nowMs}
+                    disabled={profile?.is_banned}
+                    onOpen={() => onNavigate('game', status.game)}
+                  />
+                </div>
+              ));
+            })()}
           </div>
         </section>
 
