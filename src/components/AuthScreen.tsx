@@ -4,6 +4,7 @@ import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { Loader2, Zap, ArrowRight, Trophy, Wallet, TrendingUp } from 'lucide-react';
 import LegalPage, { type LegalDocument } from '@/components/LegalPage';
 import LanguageSelector from '@/components/LanguageSelector';
+import InstallBanner from '@/components/InstallBanner';
 import PasswordInput from '@/components/ui/PasswordInput';
 import { interpolate, useT } from '@/i18n/useT';
 
@@ -193,6 +194,8 @@ export default function AuthScreen() {
             <span className="text-xs text-slate-300 font-medium">UPI Add</span>
           </div>
         </div>
+
+        <div className="mb-7 empty:hidden"><InstallBanner /></div>
 
         <div className="flex border-b border-slate-800 mb-7">
           <button

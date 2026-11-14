@@ -124,7 +124,7 @@ const hi: Record<keyof typeof en, string> = {
   'notices.reason': "कारण: {reason}",
   'notices.dismiss': "ठीक है",
   'install.title': "BetZone इंस्टॉल करें",
-  'install.body': "BetZone को होम स्क्रीन पर जोड़ें ताकि यह ऐप की तरह खुले।",
+  'install.body': "BetZone को होम स्क्रीन पर जोड़ें। यह ऐप की तरह खुलेगा और आप साइन इन रहेंगे।",
   'install.iosBody': "शेयर बटन दबाएँ, फिर \"Add to Home Screen\" चुनें।",
   'install.button': "इंस्टॉल करें",
   'install.dismiss': "अभी नहीं",

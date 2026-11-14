@@ -72,7 +72,7 @@ const CONTENT: Record<LegalDocument, { title: string; sections: LegalSection[] }
       },
       {
         heading: '4. Cookies and Session Data',
-        text: 'We use your browser\'s local storage to keep you securely logged in across browser tabs. This data does not track your activity on external websites. You are signed out automatically after 30 minutes of complete inactivity, and your stored session is cleared when you sign out.',
+        text: 'We use your browser\'s local storage to keep you securely logged in across browser tabs. This data does not track your activity on external websites. In a browser tab you are signed out automatically after 30 minutes of complete inactivity; in the installed app you stay signed in until you sign out. Your stored session is cleared when you sign out.',
       },
       {
         heading: '5. Sharing of Data',

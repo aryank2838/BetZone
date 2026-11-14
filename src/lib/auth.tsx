@@ -14,6 +14,7 @@ import {
   readStoredActivity,
   writeStoredActivity,
 } from '@/lib/inactivity';
+import { isStandalone } from '@/lib/installPrompt';
 
 interface AuthState {
   session: Session | null;
@@ -175,6 +176,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sessionUserId = state.session?.user.id;
     if (!sessionUserId) return;
+    // The installed app (home-screen icon) is a personal device: keep the
+    // player signed in until they tap Sign out. The 30-minute idle sign-out
+    // only applies in a normal browser tab, which may be a shared computer.
+    if (isStandalone()) return;
     let warningTimer: number | undefined;
     let logoutTimer: number | undefined;
     let countdownTimer: number | undefined;

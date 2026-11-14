@@ -121,7 +121,7 @@ const en = {
   'notices.reason': "Reason: {reason}",
   'notices.dismiss': "OK",
   'install.title': "Install BetZone",
-  'install.body': "Add BetZone to your home screen to open it like an app.",
+  'install.body': "Add BetZone to your home screen. It opens like an app and keeps you signed in.",
   'install.iosBody': "Tap the Share button, then \"Add to Home Screen\".",
   'install.button': "Install",
   'install.dismiss': "Not now",

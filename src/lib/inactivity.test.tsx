@@ -65,6 +65,24 @@ describe('inactivity logout', () => {
     expect(authMock.signOut).toHaveBeenCalledTimes(1);
   });
 
+  it('never signs out for inactivity inside the installed app', async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(display-mode: standalone)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      await signIn();
+      await advance(INACTIVITY_TIMEOUT_MS * 4);
+      expect(screen.getByTestId('warning')).toHaveTextContent('none');
+      expect(authMock.signOut).not.toHaveBeenCalled();
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
   it('activity resets the timer and is shared at most once per second', async () => {
     await signIn();
     const setItem = vi.spyOn(Storage.prototype, 'setItem');
