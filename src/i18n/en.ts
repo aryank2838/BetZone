@@ -510,7 +510,7 @@ const en = {
   'sports.placed': "Bet placed: ₹{amount} on {side}",
   'sports.cancel': "Cancel",
   'sports.howItWorks': "How it works",
-  'sports.rules': "All Yes bets go into one pool and all No bets into another. After the match, {fee}% of the losing pool is kept as a fee, and the rest is shared among the winners by how much they bet, plus their own money back. Betting closes when the match starts. If nobody bets on one side, or the match is postponed or cancelled, everyone gets their money back. Football results include extra time and penalties, and a draw counts as No.",
+  'sports.rules': "All Yes bets go into one pool and all No bets into another. After the match, {fee}% of the losing pool is kept as a fee, and the rest is shared among the winners by how much they bet, plus their own money back. Betting closes when the match starts. If nobody bets on one side, or the match is postponed or cancelled, everyone gets their money back. Football results include extra time and penalties, and a draw counts as No. In cricket, a tie or draw counts as No, the Super Over winner counts as the winner, and a match with no result is refunded.",
   'sports.myBets': "My sports bets",
   'sports.betStatus.open': "Waiting",
   'sports.betStatus.won': "Won ₹{amount}",

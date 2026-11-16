@@ -122,6 +122,7 @@ export default function SportsTab() {
     const { error } = await supabase.rpc('admin_set_sport_settings', {
       p_settings: {
         football_enabled: draft.football_enabled,
+        cricket_enabled: draft.cricket_enabled,
         fee_percent: draft.fee_percent,
         min_bet: draft.min_bet,
         max_bet: draft.max_bet,
@@ -160,8 +161,6 @@ export default function SportsTab() {
 
   if (loading && !settings) return <ListSkeleton rows={4} />;
 
-  const football = sync.find((row) => row.sport === 'football');
-  const syncStale = football?.last_success_at ? Date.now() - Date.parse(football.last_success_at) > 60 * 60 * 1000 : true;
   const toggleCompetition = (code: string) => {
     if (!draft) return;
     const has = draft.football_competitions.includes(code);
@@ -182,23 +181,9 @@ export default function SportsTab() {
         <SectionTitle action={
           <Button variant="ghost" onClick={() => { void load(); }} icon={<RefreshCw className="h-4 w-4" />}>Refresh</Button>
         }>Automatic updates</SectionTitle>
-        {!football ? (
-          <Alert tone="warning">
-            Football has not synced yet. Matches import automatically once the football-data.org key and the schedule are set up.
-          </Alert>
-        ) : (
-          <>
-            <p className="text-sm text-ink-soft">
-              Football: last update {ago(football.last_success_at)} · {football.events_seen} matches checked
-            </p>
-            {football.last_error && (
-              <Alert tone="error" details={football.last_error}>The last football update failed ({ago(football.last_run_at)}).</Alert>
-            )}
-            {!football.last_error && syncStale && (
-              <Alert tone="warning">Football has not updated for over an hour. Check the sync schedule.</Alert>
-            )}
-          </>
-        )}
+        {(['football', 'cricket'] as const).map((sport) => (
+          <SyncLine key={sport} label={sport === 'football' ? 'Football' : 'Cricket'} row={sync.find((row) => row.sport === sport)} />
+        ))}
       </Card>
 
       {draft && (
@@ -209,7 +194,15 @@ export default function SportsTab() {
             <input type="checkbox" className="h-5 w-5" checked={draft.football_enabled}
               onChange={(e) => setDraft({ ...draft, football_enabled: e.target.checked })} />
           </label>
-          <p className="text-xs text-ink-muted">Cricket: coming next, once the cricket score key is added.</p>
+          <label className="flex items-center justify-between gap-3 text-sm text-ink-strong">
+            <span>Cricket betting on</span>
+            <input type="checkbox" className="h-5 w-5" checked={draft.cricket_enabled}
+              onChange={(e) => setDraft({ ...draft, cricket_enabled: e.target.checked })} />
+          </label>
+          <p className="text-xs text-ink-muted">
+            Cricket covers India men&apos;s and women&apos;s senior matches and the IPL. Betting closes at the earliest
+            start time the feed gives. A tie or draw counts as No; a Super Over winner counts as the winner.
+          </p>
 
           <fieldset>
             <legend className="mb-2 text-sm font-medium text-ink-soft">Football leagues</legend>
@@ -262,6 +255,26 @@ export default function SportsTab() {
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+function SyncLine({ label, row }: { label: string; row: SyncStatus | undefined }) {
+  if (!row) {
+    return <p className="text-sm text-ink-muted">{label}: not synced yet. It starts on the next scheduled run once its key is set.</p>;
+  }
+  const stale = !row.last_success_at || Date.now() - Date.parse(row.last_success_at) > 60 * 60 * 1000;
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-ink-soft">
+        {label}: last update {ago(row.last_success_at)} · {row.events_seen} matches checked
+      </p>
+      {row.last_error && (
+        <Alert tone="error" details={row.last_error}>The last {label.toLowerCase()} update failed ({ago(row.last_run_at)}).</Alert>
+      )}
+      {!row.last_error && stale && (
+        <Alert tone="warning">{label} has not updated for over an hour. Check the sync schedule.</Alert>
+      )}
     </div>
   );
 }

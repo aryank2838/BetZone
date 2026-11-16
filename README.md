@@ -122,7 +122,7 @@ Self-exclusion must not be lifted through normal user or admin controls. It expi
 
 The admin settings allowlist includes `merchant_upi_id`, `merchant_name`, `approval_time_note`, `support_whatsapp`, `support_email`, `max_user_round_points`, and `max_number_liability`; `admin_get_settings()` returns each with its last change time and the changing admin. Fixed rule values (minimum withdrawal 100, maximum withdrawal 100000, approved-deposit minimum 100, maximum add-funds 100000, turnover multiplier 1×, maximum 5000 per pick and 20000 per submit) live in the internal `internal_rule_constants()` function and are exposed read-only through `get_public_rules`; the frontend reads its bet limits from there and only keeps the quick-stake buttons locally. User responsible-play values are stored per-user as `daily_deposit_limit` and `daily_loss_limit`.
 
-## Sports pools (football)
+## Sports pools (football and cricket)
 
 Players bet Yes or No on "Will <team> win?". Yes bets and No bets go into two pools; the house never adds money. After the match the fee (`fee_percent` of the losing pool, fixed on each match when it is imported) is kept and the rest is shared among winners by stake, on top of their stake back. Betting closes at the scheduled start. Refunds go back to the exact balances the stake came from when only one side has bets, the match is postponed or cancelled, the start moves earlier than bets already placed, or no result arrives within 3 days. Admin accounts cannot bet. Bets and payouts use the `selection_submit` and `winning_payout` ledger reasons (metadata `game` = the sport), so loss limits and reports include sports; refunds use `bet_refund`.
 
@@ -131,7 +131,8 @@ Everything runs automatically through the `sports-sync` Edge Function, which pg_
 1. Deploy the function: `supabase functions deploy sports-sync --no-verify-jwt` (it checks its own `x-cron-secret` header instead of a user JWT).
 2. Function secrets: `supabase secrets set SPORTS_CRON_SECRET=<random> FOOTBALL_DATA_API_KEY=<key>`.
 3. Vault secrets used by the cron job: `select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/sports-sync', 'sports_sync_url');` and `select vault.create_secret('<same random>', 'sports_cron_secret');`.
-4. Turn football on in Admin → More → Sports. That screen shows the last sync, the pools per match, and buttons to refund a match or settle it by hand if the automatic result gets stuck.
+4. Cricket (cricketdata.org, 100 calls a day free): store the key in Vault with `select vault.create_secret('<key>', 'cricket_api_key');`. cricketdata.org resets connections from the Edge Function network, so the function asks the database to send cricket requests through pg_net (`cricket_http_get`) and reads the replies on its next run (`cricket_http_result`, which strips the echoed key and deletes the reply). It looks for India senior (men and women) series and the IPL twice a day and fetches a series' fixtures every 6 hours, or every 45 minutes while one of its matches is about to start or under way, stopping at 90 calls a day. The winner is read from the result text ("India won by 22 runs"); ties and draws count as No, a Super Over winner counts as the winner, no result or abandoned is refunded, and unrecognised text is left for the admin to settle by hand. Betting closes at the earlier of `dateTimeGMT` and the start time in the status text, because the two sometimes differ. A match with no result is refunded after 7 days (Tests last up to 5).
+5. Turn football and cricket on in Admin → More → Sports. That screen shows the last sync, the pools per match, and buttons to refund a match or settle it by hand if the automatic result gets stuck.
 
 ## Deployment
 
