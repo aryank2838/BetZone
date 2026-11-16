@@ -523,6 +523,17 @@ const mr: Record<keyof typeof en, string> = {
   'sports.betStatus.won': "₹{amount} जिंकले",
   'sports.betStatus.lost': "हरले",
   'sports.betStatus.refunded': "₹{amount} परत",
+  'sports.live': "लाइव्ह",
+  'sports.waiting': "निकालाची वाट",
+  'sports.finished': "संपली",
+  'sports.refundedShort': "पैसे परत",
+  'sports.closesShort': "{time} मध्ये बंद",
+  'sports.totalPool': "पूल ₹{amount}",
+  'sports.beFirst': "सर्वात आधी बेट लावा",
+  'sports.per100': "₹100 → ₹{amount}",
+  'sports.yourBet': "तुमची बेट: {side} ₹{amount}",
+  'sports.youWon': "जिंकले",
+  'sports.youLost': "हरले",
 };
 
 export default mr;

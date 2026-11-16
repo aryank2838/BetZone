@@ -523,6 +523,17 @@ const hi: Record<keyof typeof en, string> = {
   'sports.betStatus.won': "₹{amount} जीते",
   'sports.betStatus.lost': "हारे",
   'sports.betStatus.refunded': "₹{amount} वापस",
+  'sports.live': "लाइव",
+  'sports.waiting': "नतीजे का इंतज़ार",
+  'sports.finished': "खत्म",
+  'sports.refundedShort': "पैसे वापस",
+  'sports.closesShort': "{time} में बंद",
+  'sports.totalPool': "पूल ₹{amount}",
+  'sports.beFirst': "सबसे पहले बेट लगाएँ",
+  'sports.per100': "₹100 → ₹{amount}",
+  'sports.yourBet': "आपकी बेट: {side} ₹{amount}",
+  'sports.youWon': "जीते",
+  'sports.youLost': "हारे",
 };
 
 export default hi;

@@ -520,6 +520,17 @@ const en = {
   'sports.betStatus.won': "Won ₹{amount}",
   'sports.betStatus.lost': "Lost",
   'sports.betStatus.refunded': "Refunded ₹{amount}",
+  'sports.live': "Live",
+  'sports.waiting': "Waiting for result",
+  'sports.finished': "Finished",
+  'sports.refundedShort': "Refunded",
+  'sports.closesShort': "Closes {time}",
+  'sports.totalPool': "Pool ₹{amount}",
+  'sports.beFirst': "Be the first to bet",
+  'sports.per100': "₹100 → ₹{amount}",
+  'sports.yourBet': "Your bet: {side} ₹{amount}",
+  'sports.youWon': "Won",
+  'sports.youLost': "Lost",
 } as const;
 
 export default en;
