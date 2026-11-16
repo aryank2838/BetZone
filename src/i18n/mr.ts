@@ -491,7 +491,6 @@ const mr: Record<keyof typeof en, string> = {
   'sports.empty': "आत्ता कोणतीही मॅच नाही. नवीन मॅच इथे आपोआप दिसतील.",
   'sports.question': "{team} जिंकेल का?",
   'sports.closesIn': "बेटिंग {time} मध्ये बंद होईल",
-  'sports.startsAt': "{time} सुरू · मॅच सुरू होताच बेटिंग बंद",
   'sports.closed': "बेटिंग बंद · निकालाची वाट",
   'sports.resultYes': "निकाल: हो, {team} जिंकली",
   'sports.resultNo': "निकाल: नाही, {team} जिंकली नाही",

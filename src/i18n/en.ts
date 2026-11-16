@@ -488,7 +488,6 @@ const en = {
   'sports.empty': "No matches right now. New matches appear here automatically.",
   'sports.question': "Will {team} win?",
   'sports.closesIn': "Betting closes in {time}",
-  'sports.startsAt': "Starts {time} · betting closes at kick-off",
   'sports.closed': "Betting closed · waiting for the result",
   'sports.resultYes': "Result: Yes, {team} won",
   'sports.resultNo': "Result: No, {team} did not win",

@@ -491,7 +491,6 @@ const hi: Record<keyof typeof en, string> = {
   'sports.empty': "अभी कोई मैच नहीं है। नए मैच यहाँ अपने-आप आ जाएँगे।",
   'sports.question': "क्या {team} जीतेगी?",
   'sports.closesIn': "बेटिंग {time} में बंद होगी",
-  'sports.startsAt': "{time} शुरू · मैच शुरू होते ही बेटिंग बंद",
   'sports.closed': "बेटिंग बंद · नतीजे का इंतज़ार",
   'sports.resultYes': "नतीजा: हाँ, {team} जीती",
   'sports.resultNo': "नतीजा: ना, {team} नहीं जीती",
