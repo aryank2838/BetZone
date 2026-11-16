@@ -7,7 +7,7 @@ import { BET_TYPES, GAME_LABELS, isValidPatti, pattiDigit, type BetType, type Ga
 import { useGameStatus } from '@/lib/useGameStatus';
 import { friendlyErrorDetails } from '@/lib/errors';
 import StatsTab, { type AdminStats } from '@/components/admin/StatsTab';
-import SelectionsTab, { type AdminSelection } from '@/components/admin/SelectionsTab';
+import SelectionsTab from '@/components/admin/SelectionsTab';
 import SettingsTab from '@/components/admin/SettingsTab';
 import HolidaySettings from '@/components/admin/HolidaySettings';
 import UsersTab, { type AdminUser } from '@/components/admin/UsersTab';
@@ -271,8 +271,6 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
   const [userTo, setUserTo] = useState('');
   const [detailUser, setDetailUser] = useState<AdminUser | null>(null);
 
-  const [selections, setSelections] = useState<AdminSelection[]>([]);
-  const [loadingSelections, setLoadingSelections] = useState(true);
 
   const [adjustTarget, setAdjustTarget] = useState<{ user: AdminUser; type: 'points' | 'wallet' } | null>(null);
   const [adjustDelta, setAdjustDelta] = useState('');
@@ -485,15 +483,6 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
     setLoadingUsers(false);
   };
 
-  const loadSelections = async (g: string, date: string) => {
-    if (!date) return;
-    setLoadingSelections(true);
-    const { data, error } = await supabase.rpc('admin_list_selections', { p_game: g, p_round_date: date });
-    if (error) setMessage(errorNotice(error, 'load bets for this round'));
-    if (!error && data) setSelections(data as AdminSelection[]);
-    setLoadingSelections(false);
-  };
-
   useEffect(() => {
     loadLatest(game);
     loadStats(statsRoundDate);
@@ -515,7 +504,6 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
 
   useEffect(() => {
     if (tab === 'users') loadUsers(userSearch);
-    if (tab === 'selections') loadSelections(game, selectionDate);
     if (tab === 'settings') loadSettings();
   }, [tab, game, roundDate, selectionDate, loadUsers, loadSettings, userSearch]);
 
@@ -973,8 +961,7 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
             games={gameOptions}
             game={game}
             roundDate={selectionDate}
-            selections={selections}
-            loading={loadingSelections}
+            status={gameStatuses.find((s) => s.game === game)}
             onGameChange={setGame}
             onRoundDateChange={setSelectionDate}
           />

@@ -16,6 +16,7 @@ INSERT INTO function_execute_allowlist (grantee, routine_name) VALUES
   ('authenticated', 'accept_terms'),
   ('authenticated', 'admin_add_blocked_domain'),
   ('authenticated', 'admin_adjust_points'),
+  ('authenticated', 'admin_bets_board'),
   ('authenticated', 'admin_can_delete_screenshot'),
   ('authenticated', 'admin_close_ticket'),
   ('authenticated', 'admin_daily_report'),

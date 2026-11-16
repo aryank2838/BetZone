@@ -35,6 +35,7 @@ psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/database_regressions.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/signup_protection.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/first_deposit_bonus.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/sports_pools.sql
+psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/admin_bets_board.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/function_privilege_audit.sql
 DATABASE_URL="$DB" bash supabase/tests/concurrency.sh
 ```
