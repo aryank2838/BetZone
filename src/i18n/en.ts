@@ -404,7 +404,7 @@ const en = {
   'bet.pattiDigits': 'Patti must be 3 digits.',
   'bet.digitRange': 'Digit must be 0–9.',
   'bet.pattiInvalid': 'That patti and digit don\x27t go together. Check them and try again (e.g. 123-6).',
-  'bet.alreadyPlaced': 'You already placed a bet on {number}.',
+  'bet.alreadyPlaced': '(already placed {amount}, tap to add more)',
   'bet.addOne': 'Add at least one number first.',
   'bet.placed': 'Bets placed: {count} for {amount}. Good luck!',
   'bets.title': 'My bets',

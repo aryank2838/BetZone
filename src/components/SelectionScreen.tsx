@@ -203,7 +203,6 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
   const validStake = (points: number) => Number.isInteger(points) && points >= 1 && points <= betLimits.maxPerBet;
 
   const addPending = (number: string, points: number) => {
-    if (lockedMap.has(number)) return;
     setPending((prev) => {
       const existing = prev.find((p) => p.number === number);
       if (existing) return prev.map((p) => p.number === number ? { ...p, points } : p);
@@ -221,7 +220,6 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
   };
 
   const togglePick = (label: string) => {
-    if (lockedMap.has(label)) return;
     if (pending.some((p) => p.number === label)) {
       removePending(label);
       return;
@@ -243,7 +241,6 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
     if (!isValidPattiCombo(num)) { setMessage({ text: t('bet.pattiInvalid') }); return; }
     const pts = Number(manualPoints);
     if (!validStake(pts)) { setMessage({ text: stakeError }); return; }
-    if (lockedMap.has(num)) { setMessage({ text: interpolate(t('bet.alreadyPlaced'), { number: num }) }); return; }
     addPending(num, pts);
     setManualPatti('');
     setManualDigit('');
@@ -305,24 +302,29 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
       <div className={digit ? 'grid grid-cols-5 gap-2' : 'grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5'}>
         {Array.from({ length: count }, (_, n) => {
           const label = digit ? String(n) : String(n).padStart(2, '0');
-          const isLocked = lockedMap.has(label);
+          const placedPoints = lockedMap.get(label);
           const isPending = pending.some((p) => p.number === label);
           return (
             <button
               key={label}
               type="button"
               onClick={() => togglePick(label)}
-              disabled={isLocked}
               aria-pressed={isPending}
-              className={`aspect-square rounded-lg border font-bold tabular-nums transition-colors active:scale-95 ${digit ? 'text-lg' : 'text-sm'} ${
-                isLocked
-                  ? 'border-surface-strong bg-surface-raised text-ink-muted line-through decoration-ink-muted/60'
-                  : isPending
+              className={`relative aspect-square rounded-lg border font-bold tabular-nums transition-colors active:scale-95 ${digit ? 'text-lg' : 'text-sm'} ${
+                isPending
                   ? digit ? 'border-brand-500 bg-brand-500 text-white' : 'border-amber-500 bg-amber-500 text-white'
+                  : placedPoints !== undefined
+                  ? 'border-brand-500/60 bg-surface-raised text-ink-strong hover:bg-slate-700'
                   : 'border-surface-strong bg-surface-raised text-ink-soft hover:border-slate-600 hover:bg-slate-700'
               }`}
             >
               {label}
+              {placedPoints !== undefined && (
+                <>
+                  <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand-400" aria-hidden="true" />
+                  <span className="sr-only"> {interpolate(t('bet.alreadyPlaced'), { amount: rupees(placedPoints) })}</span>
+                </>
+              )}
             </button>
           );
         })}

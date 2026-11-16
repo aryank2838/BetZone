@@ -407,7 +407,7 @@ const mr: Record<keyof typeof en, string> = {
   'bet.pattiDigits': 'पत्ती 3 अंकी असावी.',
   'bet.digitRange': 'अंक 0–9 असावा.',
   'bet.pattiInvalid': 'ही पत्ती आणि अंक जुळत नाहीत. तपासून पुन्हा प्रयत्न करा (उदा. 123-6).',
-  'bet.alreadyPlaced': 'तुम्ही {number} वर आधीच डाव लावला आहे.',
+  'bet.alreadyPlaced': '(आधीच {amount} लावले आहेत, अजून लावण्यासाठी टॅप करा)',
   'bet.addOne': 'आधी किमान एक नंबर जोडा.',
   'bet.placed': 'डाव लावले: {count}, एकूण {amount}. शुभेच्छा!',
   'bets.title': 'माझे डाव',
