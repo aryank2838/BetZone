@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cricketResult, cricketStartMs, isSeriesInWindow, leagueSearches, mapCricketMatch, parseSeriesDate, seriesLeague,
+  cricketFormat, cricketResult, cricketStartMs, isSeriesInWindow, leagueSearches, mapCricketMatch, nextCricketCheck, parseSeriesDate, seriesLeague,
   type CricketLeague,
 } from './cricketData';
 
@@ -109,5 +109,57 @@ describe('mapCricketMatch', () => {
       { id: 'ipl', name: 'Indian Premier League 2027' })).toMatchObject({ subject_side: 'home', home_team: 'Mumbai Indians' });
     expect(mapCricketMatch({ id: 'w', dateTimeGMT: '2026-11-20T08:10:00', teams: ['Sydney Sixers Women', 'Perth Scorchers Women'] },
       { id: 'wbbl', name: 'Womens Big Bash League 2026' })).toMatchObject({ subject_side: 'home', home_team: 'Sydney Sixers Women' });
+  });
+});
+
+describe('cricketFormat', () => {
+  it('uses matchType, then the match name', () => {
+    expect(cricketFormat({ matchType: 'odi' })).toBe('odi');
+    expect(cricketFormat({ name: 'New Zealand vs India, 2nd Test, India tour of New Zealand 2026' })).toBe('test');
+    expect(cricketFormat({ name: 'New Zealand vs India, 3rd ODI' })).toBe('odi');
+    expect(cricketFormat({ name: 'Sixers vs Scorchers, 12th Match' })).toBe('t20');
+  });
+});
+
+describe('nextCricketCheck', () => {
+  const MIN = 60_000;
+  const HR = 60 * MIN;
+  const now = Date.parse('2026-11-20T10:00:00Z');
+  const wbbl = { id: 'wbbl', name: 'Womens Big Bash League 2026' };
+  const teams = ['Sydney Sixers Women', 'Perth Scorchers Women'];
+  const gmt = (ms: number) => new Date(ms).toISOString().slice(0, 19);
+  const match = (id: string, startMs: number, extra: Record<string, unknown> = {}) => ({
+    id, teams, dateTimeGMT: gmt(startMs), status: '', matchStarted: false, matchEnded: false, ...extra,
+  });
+
+  it('checks every 6 hours when nothing is close', () => {
+    expect(nextCricketCheck([match('a', now + 3 * 24 * HR)], wbbl, now, new Set())).toBe(now + 6 * HR);
+  });
+  it('checks 2 hours before the start, then hourly', () => {
+    expect(nextCricketCheck([match('a', now + 5 * HR)], wbbl, now, new Set())).toBe(now + 3 * HR);
+    expect(nextCricketCheck([match('a', now + 30 * MIN)], wbbl, now, new Set())).toBe(now + HR);
+  });
+  it('waits until a T20 could be finishing, then checks every 15 minutes', () => {
+    const live = { matchStarted: true, status: 'Perth Scorchers Women opt to bowl' };
+    expect(nextCricketCheck([match('a', now - HR, live)], wbbl, now, new Set(['a']))).toBe(now + 1.75 * HR);
+    expect(nextCricketCheck([match('a', now - 3 * HR, live)], wbbl, now, new Set(['a']))).toBe(now + 15 * MIN);
+  });
+  it('checks a Test every 30 minutes from day 3', () => {
+    const nz = { id: 'nz', name: 'India tour of New Zealand 2026' };
+    const test = (start: number) => ({
+      id: 't', teams: ['New Zealand', 'India'], name: 'New Zealand vs India, 2nd Test', dateTimeGMT: gmt(start),
+      status: 'Day 2: Stumps', matchStarted: true, matchEnded: false,
+    });
+    expect(nextCricketCheck([test(now - 24 * HR)], nz, now, new Set(['t']))).toBe(now + 2 * HR);
+    expect(nextCricketCheck([test(now - 3.5 * 24 * HR)], nz, now, new Set(['t']))).toBe(now + 30 * MIN);
+  });
+  it('rechecks a finished match 15 minutes later until it is paid', () => {
+    const done = match('a', now - 4 * HR, { matchStarted: true, matchEnded: true, status: 'Sydney Sixers Women won by 5 wkts' });
+    expect(nextCricketCheck([done], wbbl, now, new Set(['a']))).toBe(now + 15 * MIN);
+    expect(nextCricketCheck([done], wbbl, now, new Set())).toBe(now + 6 * HR);
+  });
+  it('ignores matches we do not offer', () => {
+    const other = { id: 'x', teams: ['Australia', 'England'], dateTimeGMT: gmt(now + 30 * MIN), matchStarted: false };
+    expect(nextCricketCheck([other], { id: 'nz', name: 'India tour of New Zealand 2026' }, now, new Set())).toBe(now + 6 * HR);
   });
 });

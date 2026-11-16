@@ -20,7 +20,7 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { mapFootballMatch, syncWindow, type FdMatch, type SyncEvent } from './footballData.ts';
 import {
-  isCricketLeague, isSeriesInWindow, leagueSearches, mapCricketMatch, parseSeriesDate, seriesLeague,
+  isCricketLeague, isSeriesInWindow, leagueSearches, mapCricketMatch, nextCricketCheck, parseSeriesDate, seriesLeague,
   type CricketLeague, type CricMatch, type CricSeries,
 } from './cricketData.ts';
 
@@ -84,6 +84,10 @@ interface CricReply<T> {
   body: { status?: string; reason?: string; data?: T; info?: { hitsToday?: number } } | null;
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+interface FeedRequest { request_id: number; kind: 'discovery' | 'series'; ref: string; created_at: string }
+
 async function syncCricket(supabase: SupabaseClient, leagues: CricketLeague[]) {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
@@ -93,79 +97,100 @@ async function syncCricket(supabase: SupabaseClient, leagues: CricketLeague[]) {
   let queued = 0;
 
   const { data: series, error: seriesError } = await supabase
-    .from('sport_feed_series').select('series_id, name, start_date, end_date, last_fetched_at').eq('provider', 'cricketdata');
+    .from('sport_feed_series').select('series_id, name').eq('provider', 'cricketdata');
   if (seriesError) throw new Error(seriesError.message);
   const seriesName = new Map((series ?? []).map((s) => [s.series_id as string, s.name as string]));
+
+  // Matches still open or waiting for payout, by series: they decide how often a series is checked.
+  const { data: active } = await supabase
+    .from('sport_events').select('competition, provider_event_id, state')
+    .eq('sport', 'cricket').in('state', ['open', 'closed']);
+  const unpaid = new Set((active ?? []).map((e) => e.provider_event_id as string));
 
   const { data: hitsRow } = await supabase.from('sport_feed_state').select('at, value').eq('key', 'cricket_hits').maybeSingle();
   let hitsToday = hitsRow && hitsRow.at.slice(0, 10) === nowIso.slice(0, 10) ? hitsRow.value ?? 0 : 0;
 
-  // 1. Collect replies to earlier requests.
+  /** Reads the replies that have arrived. Returns the requests still waiting. */
+  const collect = async (requests: FeedRequest[], giveUp: boolean): Promise<FeedRequest[]> => {
+    const waiting: FeedRequest[] = [];
+    for (const req of requests) {
+      const { data, error } = await supabase.rpc('cricket_http_result', { p_request_id: req.request_id });
+      if (error) throw new Error(error.message);
+      const reply = data as CricReply<unknown> | null;
+      if (!reply) {
+        // Not back yet. Give up after 30 minutes; it is queued again when due.
+        if (giveUp && Date.now() - Date.parse(req.created_at) > 30 * MINUTE) {
+          await supabase.from('sport_feed_requests').delete().eq('request_id', req.request_id);
+          problems.push(`cricketdata ${req.kind}: no reply`);
+        } else {
+          waiting.push(req);
+        }
+        continue;
+      }
+      await supabase.from('sport_feed_requests').delete().eq('request_id', req.request_id);
+      const body = reply.body;
+      if (reply.status_code !== 200 || !body || body.status !== 'success') {
+        problems.push(scrub(`cricketdata ${req.kind}: ${reply.error ?? body?.reason ?? `HTTP ${reply.status_code}`}`));
+        continue;
+      }
+      hitsToday = Math.max(hitsToday, body.info?.hitsToday ?? 0);
+      collected += 1;
+
+      if (req.kind === 'discovery') {
+        const rows = ((body.data as CricSeries[] | undefined) ?? [])
+          .filter((s) => seriesLeague(s.name, leagues) !== null && isSeriesInWindow(s, now))
+          .map((s) => {
+            const start = parseSeriesDate(s.startDate, null);
+            const end = parseSeriesDate(s.endDate, start);
+            seriesName.set(s.id, s.name);
+            return {
+              provider: 'cricketdata',
+              series_id: s.id,
+              name: s.name.slice(0, 120),
+              start_date: start === null ? null : new Date(start).toISOString().slice(0, 10),
+              end_date: end === null ? null : new Date(end).toISOString().slice(0, 10),
+            };
+          });
+        if (rows.length) {
+          const { error: upsertError } = await supabase.from('sport_feed_series').upsert(rows, { onConflict: 'provider,series_id' });
+          if (upsertError) throw new Error(upsertError.message);
+        }
+      } else {
+        const ref = { id: req.ref, name: seriesName.get(req.ref) ?? req.ref };
+        const matches = (body.data as { matchList?: CricMatch[] } | undefined)?.matchList ?? [];
+        for (const match of matches) {
+          const event = mapCricketMatch(match, ref);
+          if (event) events.push(event);
+        }
+        const next = nextCricketCheck(matches, ref, Date.now(), unpaid);
+        await supabase.from('sport_feed_series')
+          .update({ next_check_at: new Date(next).toISOString() })
+          .eq('provider', 'cricketdata').eq('series_id', req.ref);
+      }
+    }
+    return waiting;
+  };
+
+  // 1. Replies to requests sent in earlier runs.
   const { data: pending, error: pendingError } = await supabase.from('sport_feed_requests').select('*');
   if (pendingError) throw new Error(pendingError.message);
-  for (const req of pending ?? []) {
-    const { data, error } = await supabase.rpc('cricket_http_result', { p_request_id: req.request_id });
-    if (error) throw new Error(error.message);
-    const reply = data as CricReply<unknown> | null;
-    if (!reply) {
-      // Not back yet. Give up after 30 minutes; it will be queued again when due.
-      if (now - Date.parse(req.created_at) > 30 * MINUTE) {
-        await supabase.from('sport_feed_requests').delete().eq('request_id', req.request_id);
-        problems.push(`cricketdata ${req.kind}: no reply`);
-      }
-      continue;
-    }
-    await supabase.from('sport_feed_requests').delete().eq('request_id', req.request_id);
-    const body = reply.body;
-    if (reply.status_code !== 200 || !body || body.status !== 'success') {
-      problems.push(scrub(`cricketdata ${req.kind}: ${reply.error ?? body?.reason ?? `HTTP ${reply.status_code}`}`));
-      continue;
-    }
-    hitsToday = Math.max(hitsToday, body.info?.hitsToday ?? 0);
-    collected += 1;
+  const stillPending = await collect((pending ?? []) as FeedRequest[], true);
 
-    if (req.kind === 'discovery') {
-      const rows = ((body.data as CricSeries[] | undefined) ?? [])
-        .filter((s) => seriesLeague(s.name, leagues) !== null && isSeriesInWindow(s, now))
-        .map((s) => {
-          const start = parseSeriesDate(s.startDate, null);
-          const end = parseSeriesDate(s.endDate, start);
-          seriesName.set(s.id, s.name);
-          return {
-            provider: 'cricketdata',
-            series_id: s.id,
-            name: s.name.slice(0, 120),
-            start_date: start === null ? null : new Date(start).toISOString().slice(0, 10),
-            end_date: end === null ? null : new Date(end).toISOString().slice(0, 10),
-          };
-        });
-      if (rows.length) {
-        const { error: upsertError } = await supabase.from('sport_feed_series').upsert(rows, { onConflict: 'provider,series_id' });
-        if (upsertError) throw new Error(upsertError.message);
-      }
-    } else {
-      const name = seriesName.get(req.ref) ?? req.ref;
-      for (const match of (body.data as { matchList?: CricMatch[] } | undefined)?.matchList ?? []) {
-        const event = mapCricketMatch(match, { id: req.ref, name });
-        if (event) events.push(event);
-      }
-    }
-  }
-  await supabase.from('sport_feed_state').upsert({ key: 'cricket_hits', at: nowIso, value: hitsToday });
-
-  // 2. Queue what is due now.
-  const pendingRefs = new Set((pending ?? []).map((p) => `${p.kind}:${p.ref}`));
+  // 2. Send what is due now.
+  const pendingRefs = new Set(stillPending.map((p) => `${p.kind}:${p.ref}`));
+  const sent: FeedRequest[] = [];
   const queue = async (kind: 'discovery' | 'series', ref: string, path: string, params: Record<string, string>) => {
     if (hitsToday + queued >= CRICKET_DAILY_STOP || pendingRefs.has(`${kind}:${ref}`)) return false;
     const { data: requestId, error } = await supabase.rpc('cricket_http_get', { p_path: path, p_params: params });
     if (error) throw new Error(error.message);
     const { error: insertError } = await supabase.from('sport_feed_requests').insert({ request_id: requestId, kind, ref });
     if (insertError) throw new Error(insertError.message);
+    sent.push({ request_id: requestId as number, kind, ref, created_at: new Date().toISOString() });
     queued += 1;
     return true;
   };
 
-  // Twice a day, look for India senior series and the IPL.
+  // Twice a day, look for the chosen leagues' series.
   const { data: discovery } = await supabase.from('sport_feed_state').select('at').eq('key', 'cricket_discovery').maybeSingle();
   if (!discovery || now - Date.parse(discovery.at) > 12 * HOUR) {
     let all = true;
@@ -175,13 +200,9 @@ async function syncCricket(supabase: SupabaseClient, leagues: CricketLeague[]) {
     if (all) await supabase.from('sport_feed_state').upsert({ key: 'cricket_discovery', at: nowIso });
   }
 
-  // Each series' fixtures: every 60 minutes while one of its matches is about
-  // to start or under way, otherwise every 6 hours.
-  const { data: active } = await supabase
-    .from('sport_events').select('competition, state, starts_at').eq('sport', 'cricket').in('state', ['open', 'closed']);
-  // Read the list again so series found in step 1 are fetched in this run.
+  // Each series when its next check is due (see nextCricketCheck), at least every 6 hours.
   const { data: current, error: currentError } = await supabase
-    .from('sport_feed_series').select('series_id, name, start_date, end_date, last_fetched_at').eq('provider', 'cricketdata');
+    .from('sport_feed_series').select('series_id, name, start_date, end_date, last_fetched_at, next_check_at').eq('provider', 'cricketdata');
   if (currentError) throw new Error(currentError.message);
   for (const s of current ?? []) {
     const mine = (active ?? []).filter((e) => e.competition === s.series_id);
@@ -194,9 +215,9 @@ async function syncCricket(supabase: SupabaseClient, leagues: CricketLeague[]) {
     if (start !== null && start > now + 8 * DAY) continue;
     // A league switched off stops syncing, except for matches that still have bets to settle.
     if (seriesLeague(s.name, leagues) === null && mine.length === 0) continue;
-    const busy = mine.some((e) => e.state === 'closed' || Date.parse(e.starts_at) - now < 2 * HOUR);
-    const every = busy ? 60 * MINUTE : 6 * HOUR;
-    if (s.last_fetched_at && now - Date.parse(s.last_fetched_at) < every) continue;
+    const due = !s.next_check_at || now >= Date.parse(s.next_check_at)
+      || !s.last_fetched_at || now - Date.parse(s.last_fetched_at) >= 6 * HOUR;
+    if (!due) continue;
     if (await queue('series', s.series_id, 'series_info', { id: s.series_id })) {
       await supabase.from('sport_feed_series')
         .update({ last_fetched_at: nowIso })
@@ -204,7 +225,15 @@ async function syncCricket(supabase: SupabaseClient, leagues: CricketLeague[]) {
     }
   }
 
-  // 3. Hand the matches to the database.
+  // 3. Replies usually arrive within about 20 seconds: read them now instead of next run.
+  let waiting = sent;
+  for (let attempt = 0; attempt < 10 && waiting.length; attempt += 1) {
+    await sleep(4000);
+    waiting = await collect(waiting, false);
+  }
+  await supabase.from('sport_feed_state').upsert({ key: 'cricket_hits', at: nowIso, value: hitsToday });
+
+  // 4. Hand the matches to the database.
   let result: Record<string, unknown> = {};
   if (events.length) {
     const { data, error } = await supabase.rpc('sports_sync_upsert', { p_events: events });
@@ -214,7 +243,7 @@ async function syncCricket(supabase: SupabaseClient, leagues: CricketLeague[]) {
   return {
     events: events.length,
     problems,
-    result: { ...result, replies_read: collected, requests_sent: queued, calls_today: hitsToday + queued },
+    result: { ...result, replies_read: collected, requests_sent: queued, calls_today: Math.max(hitsToday, 0) },
   };
 }
 

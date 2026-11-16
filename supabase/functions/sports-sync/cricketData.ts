@@ -13,6 +13,7 @@ export interface CricSeries {
 export interface CricMatch {
   id: string;
   name?: string | null;
+  matchType?: string | null;
   status?: string | null;
   dateTimeGMT?: string | null;
   teams?: string[] | null;
@@ -171,4 +172,60 @@ export function mapCricketMatch(match: CricMatch, series: { id: string; name: st
     away_score: null,
     winner,
   };
+}
+
+export type CricketFormat = 't10' | 't20' | 'odi' | 'test';
+
+/** Match format from matchType, or from the match name when matchType is missing. */
+export function cricketFormat(match: Pick<CricMatch, 'matchType' | 'name'>): CricketFormat {
+  const type = (match.matchType ?? '').toLowerCase();
+  if (type === 't10' || type === 't20' || type === 'odi' || type === 'test') return type;
+  const name = match.name ?? '';
+  if (/\btest\b/i.test(name)) return 'test';
+  if (/\bODI\b|one[- ]day|\b50[- ]over/i.test(name)) return 'odi';
+  if (/\bT10\b/i.test(name)) return 't10';
+  return 't20';
+}
+
+const MIN = 60 * 1000;
+const HR = 60 * MIN;
+
+/** Shortest time a match of this format usually takes, from the start. */
+const EARLIEST_FINISH: Record<CricketFormat, number> = {
+  t10: 75 * MIN,
+  t20: 2.75 * HR,
+  odi: 6.5 * HR,
+  test: 3 * DAY,
+};
+
+/**
+ * When a series' fixtures should next be fetched, so results are seen soon
+ * after a match ends without spending the 100 free calls a day:
+ * - before the start: every 6 hours, hourly in the last 2 hours (start-time changes);
+ * - during a match: every 2 hours until it could be finishing, then every
+ *   15 minutes (Tests every 30 minutes);
+ * - a finished match not yet paid: 15 minutes later (second sighting of the result).
+ * `unpaid` holds match ids that are still open or closed in the database.
+ */
+export function nextCricketCheck(matches: CricMatch[], series: { id: string; name: string }, nowMs: number, unpaid: Set<string>): number {
+  let next = nowMs + 6 * HR;
+  for (const match of matches) {
+    const event = mapCricketMatch(match, series);
+    if (!event) continue;
+    const startMs = Date.parse(event.starts_at);
+    let at: number;
+    if (event.status === 'finished' || event.status === 'cancelled') {
+      if (!unpaid.has(match.id)) continue;
+      at = nowMs + 15 * MIN;
+    } else if (event.status === 'scheduled') {
+      at = startMs - nowMs > 2 * HR ? Math.min(startMs - 2 * HR, nowMs + 6 * HR) : nowMs + HR;
+    } else {
+      const format = cricketFormat(match);
+      const finishFrom = startMs + EARLIEST_FINISH[format];
+      const often = format === 'test' ? 30 * MIN : 15 * MIN;
+      at = nowMs >= finishFrom ? nowMs + often : Math.min(finishFrom, nowMs + 2 * HR);
+    }
+    next = Math.min(next, Math.max(at, nowMs + 15 * MIN));
+  }
+  return next;
 }
