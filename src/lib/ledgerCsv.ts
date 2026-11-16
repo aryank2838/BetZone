@@ -15,6 +15,7 @@ const REASON_LABELS: Record<string, string> = {
   payout: 'Winnings',
   withdrawal_request: 'Withdrawal',
   withdrawal_refund: 'Withdrawal refund',
+  bet_refund: 'Bet refund',
   add_funds: 'Added funds',
   admin_adjust_points: 'Admin adjustment',
   admin_adjust_wallet: 'Admin adjustment',

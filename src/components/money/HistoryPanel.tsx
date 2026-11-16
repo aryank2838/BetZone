@@ -44,6 +44,7 @@ const REASONS: Record<string, { label: TranslationKey; icon: typeof Gift }> = {
   payout: { label: 'history.winnings', icon: Trophy },
   withdrawal_request: { label: 'history.withdrawal', icon: Banknote },
   withdrawal_refund: { label: 'history.withdrawalRefund', icon: Banknote },
+  bet_refund: { label: 'history.betRefund', icon: Dice1 },
   add_funds: { label: 'history.moneyAdded', icon: Plus },
   admin_adjust_points: { label: 'history.adjustment', icon: History },
   admin_adjust_wallet: { label: 'history.adjustment', icon: History },

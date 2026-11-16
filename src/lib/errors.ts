@@ -89,6 +89,20 @@ export function friendlyError(error: unknown): FriendlyError {
   if (dailyLoss) {
     return mappedError('errors.dailyLossLimit', 'help', { limit: dailyLoss[1], today: dailyLoss[2] });
   }
+  const sportRange = raw.match(/^Each bet must be a whole number from (\d+) to (\d+)$/i);
+  if (sportRange && sportRange[1] !== '1') {
+    return mappedError('errors.sportBetRange', undefined, { min: sportRange[1], max: sportRange[2] });
+  }
+  const sportMatchMax = raw.match(/^You can bet at most (\d+) on one match\. You have already bet (\d+)\.?$/i);
+  if (sportMatchMax) {
+    return mappedError('errors.sportMatchMax', undefined, { max: sportMatchMax[1], already: sportMatchMax[2] });
+  }
+  if (message === 'admin accounts cannot place bets.') {
+    return mappedError('errors.adminNoBets');
+  }
+  if (/^betting on (football|cricket) is turned off/.test(message)) {
+    return mappedError('errors.closed', 'retry');
+  }
   const withdrawalTurnover = raw.match(/^Wager (\d+) more points before withdrawing\./i);
   if (withdrawalTurnover) {
     return mappedError('errors.withdrawalTurnover', 'help', { points: withdrawalTurnover[1] });

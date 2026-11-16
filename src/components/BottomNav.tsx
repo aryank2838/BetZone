@@ -1,18 +1,19 @@
-import { Home, ReceiptText, User, Wallet } from 'lucide-react';
+import { Home, ReceiptText, Trophy, User, Wallet } from 'lucide-react';
 import type { NavView } from '@/lib/useNav';
 import { useT } from '@/i18n/useT';
 import type { TranslationKey } from '@/i18n/context';
 
-export type TabView = Extract<NavView, 'home' | 'mybets' | 'balance' | 'settings'>;
+export type TabView = Extract<NavView, 'home' | 'mybets' | 'sports' | 'balance' | 'settings'>;
 
 const TABS: { view: TabView; label: TranslationKey; icon: typeof Home }[] = [
   { view: 'home', label: 'nav.home', icon: Home },
   { view: 'mybets', label: 'nav.myBets', icon: ReceiptText },
+  { view: 'sports', label: 'nav.sports', icon: Trophy },
   { view: 'balance', label: 'nav.money', icon: Wallet },
   { view: 'settings', label: 'nav.account', icon: User },
 ];
 
-/** Fixed bottom tab bar for the four main areas of the app. */
+/** Fixed bottom tab bar for the five main areas of the app. */
 export default function BottomNav({ active, onNavigate }: { active: TabView; onNavigate: (view: TabView) => void }) {
   const { t } = useT();
   return (
@@ -20,7 +21,7 @@ export default function BottomNav({ active, onNavigate }: { active: TabView; onN
       aria-label={t('nav.label')}
       className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-border bg-surface-page/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl"
     >
-      <ul className="mx-auto grid max-w-2xl grid-cols-4">
+      <ul className="mx-auto grid max-w-2xl grid-cols-5">
         {TABS.map(({ view, label, icon: Icon }) => {
           const current = view === active;
           return (

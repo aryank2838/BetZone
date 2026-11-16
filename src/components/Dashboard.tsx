@@ -36,6 +36,7 @@ const MyBetsPage = lazy(() => import('@/components/MyBetsPage'));
 const PlayLimitsPage = lazy(() => import('@/components/PlayLimitsPage'));
 const RulesPage = lazy(() => import('@/components/RulesPage'));
 const SettingsPage = lazy(() => import('@/components/SettingsPage'));
+const SportsPage = lazy(() => import('@/components/SportsPage'));
 
 function PageLoading() {
   const { t } = useT();
@@ -49,6 +50,7 @@ function PageLoading() {
 const TAB_FOR_VIEW: Partial<Record<NavView, TabView>> = {
   home: 'home',
   mybets: 'mybets',
+  sports: 'sports',
   balance: 'balance',
   wallet: 'balance',
   settings: 'settings',
@@ -125,6 +127,8 @@ function DashboardContent({ nav, navigate, goHome, adminTarget, openAdmin }: {
 
   if (nav.view === 'mybets' && user) {
     page = <MyBetsPage onGames={() => goHome()} />;
+  } else if (nav.view === 'sports' && user) {
+    page = <SportsPage onAddFunds={() => goTo('balance')} />;
   } else if ((nav.view === 'balance' || nav.view === 'wallet') && user) {
     page = (
       <BalancePage

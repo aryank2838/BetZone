@@ -15,6 +15,7 @@ import RequestsTab, { type AddFundsRequest, type AdminListFilter, type Withdrawa
 import SupportTab from '@/components/admin/SupportTab';
 import HelpButton from '@/components/HelpButton';
 import ReportsTab from '@/components/admin/ReportsTab';
+import SportsTab from '@/components/admin/SportsTab';
 import UserDetail from '@/components/admin/UserDetail';
 import { useDialogA11y } from '@/lib/useDialogA11y';
 import { useFormat } from '@/i18n/useFormat';
@@ -29,7 +30,7 @@ import { useAdminAlerts } from '@/lib/adminAlertsContext';
 import { formatClockTime } from '@/lib/countdown';
 import { currentResultRound } from '@/lib/adminOverview';
 
-export type AdminTab = 'results' | 'requests' | 'users' | 'selections' | 'stats' | 'settings' | 'support' | 'reports';
+export type AdminTab = 'results' | 'requests' | 'users' | 'selections' | 'stats' | 'settings' | 'support' | 'reports' | 'sports';
 
 interface AdminPanelProps {
   onBack: () => void;
@@ -193,6 +194,7 @@ const MORE_TABS: Array<{ id: Tab; label: string; icon: typeof BarChart3 }> = [
   { id: 'stats', label: 'Overview', icon: BarChart3 },
   { id: 'selections', label: 'Bets', icon: ListChecks },
   { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'sports', label: 'Sports', icon: Trophy },
   { id: 'support', label: 'Support', icon: LifeBuoy },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
@@ -1007,6 +1009,7 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
         )}
         {tab === 'support' && <SupportTab />}
         {tab === 'reports' && <ReportsTab />}
+        {tab === 'sports' && <SportsTab />}
       </main>
 
       {tab === 'users' && detailUser && (

@@ -15,6 +15,7 @@ export const LEDGER_REASON_LABELS: Record<string, string> = {
   payout: 'Winnings',
   withdrawal_request: 'Withdrawal requested',
   withdrawal_refund: 'Withdrawal refunded',
+  bet_refund: 'Bet refunded',
   add_funds: 'Deposit credited',
   admin_adjust_points: 'Admin adjustment (play)',
   admin_adjust_wallet: 'Admin adjustment (wallet)',

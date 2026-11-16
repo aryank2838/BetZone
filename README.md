@@ -34,6 +34,7 @@ DB=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/database_regressions.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/signup_protection.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/first_deposit_bonus.sql
+psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/sports_pools.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/function_privilege_audit.sql
 DATABASE_URL="$DB" bash supabase/tests/concurrency.sh
 ```
@@ -120,6 +121,17 @@ Self-exclusion must not be lifted through normal user or admin controls. It expi
 ## Application settings
 
 The admin settings allowlist includes `merchant_upi_id`, `merchant_name`, `approval_time_note`, `support_whatsapp`, `support_email`, `max_user_round_points`, and `max_number_liability`; `admin_get_settings()` returns each with its last change time and the changing admin. Fixed rule values (minimum withdrawal 100, maximum withdrawal 100000, approved-deposit minimum 100, maximum add-funds 100000, turnover multiplier 1×, maximum 5000 per pick and 20000 per submit) live in the internal `internal_rule_constants()` function and are exposed read-only through `get_public_rules`; the frontend reads its bet limits from there and only keeps the quick-stake buttons locally. User responsible-play values are stored per-user as `daily_deposit_limit` and `daily_loss_limit`.
+
+## Sports pools (football)
+
+Players bet Yes or No on "Will <team> win?". Yes bets and No bets go into two pools; the house never adds money. After the match the fee (`fee_percent` of the losing pool, fixed on each match when it is imported) is kept and the rest is shared among winners by stake, on top of their stake back. Betting closes at the scheduled start. Refunds go back to the exact balances the stake came from when only one side has bets, the match is postponed or cancelled, the start moves earlier than bets already placed, or no result arrives within 3 days. Admin accounts cannot bet. Bets and payouts use the `selection_submit` and `winning_payout` ledger reasons (metadata `game` = the sport), so loss limits and reports include sports; refunds use `bet_refund`.
+
+Everything runs automatically through the `sports-sync` Edge Function, which pg_cron calls every 10 minutes (`20261117090100_sports_sync_cron.sql`). It imports matches for the selected football-data.org competitions and passes them to `sports_sync_upsert()`, which closes betting, refunds and pays out. A result is paid only after the same result has been seen for 30 minutes. Setup:
+
+1. Deploy the function: `supabase functions deploy sports-sync --no-verify-jwt` (it checks its own `x-cron-secret` header instead of a user JWT).
+2. Function secrets: `supabase secrets set SPORTS_CRON_SECRET=<random> FOOTBALL_DATA_API_KEY=<key>`.
+3. Vault secrets used by the cron job: `select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/sports-sync', 'sports_sync_url');` and `select vault.create_secret('<same random>', 'sports_cron_secret');`.
+4. Turn football on in Admin → More → Sports. That screen shows the last sync, the pools per match, and buttons to refund a match or settle it by hand if the automatic result gets stuck.
 
 ## Deployment
 
