@@ -6,6 +6,8 @@
 //   SPORTS_CRON_SECRET     function secret, shared with the cron job (Vault: sports_cron_secret)
 //   FOOTBALL_DATA_API_KEY  function secret, football-data.org key
 //   cricket_api_key        Vault secret, cricketdata.org key (100 calls a day on the free plan)
+//
+// Cricket leagues come from sport_settings.cricket_leagues (India, IPL, WBBL, BBL, WPL).
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
 //
 // cricketdata.org resets connections from the Edge Function network, so cricket
@@ -18,8 +20,8 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { mapFootballMatch, syncWindow, type FdMatch, type SyncEvent } from './footballData.ts';
 import {
-  isSeriesInWindow, isWantedSeries, mapCricketMatch, parseSeriesDate,
-  type CricMatch, type CricSeries,
+  isCricketLeague, isSeriesInWindow, leagueSearches, mapCricketMatch, parseSeriesDate, seriesLeague,
+  type CricketLeague, type CricMatch, type CricSeries,
 } from './cricketData.ts';
 
 declare const Deno: {
@@ -32,7 +34,6 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 /** Stop queuing cricketdata.org calls for the day at this many (limit is 100). */
 const CRICKET_DAILY_STOP = 90;
-const CRICKET_SEARCHES = ['India', 'Indian Premier League'];
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -83,7 +84,7 @@ interface CricReply<T> {
   body: { status?: string; reason?: string; data?: T; info?: { hitsToday?: number } } | null;
 }
 
-async function syncCricket(supabase: SupabaseClient) {
+async function syncCricket(supabase: SupabaseClient, leagues: CricketLeague[]) {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
   const problems: string[] = [];
@@ -125,7 +126,7 @@ async function syncCricket(supabase: SupabaseClient) {
 
     if (req.kind === 'discovery') {
       const rows = ((body.data as CricSeries[] | undefined) ?? [])
-        .filter((s) => isWantedSeries(s.name) && isSeriesInWindow(s, now))
+        .filter((s) => seriesLeague(s.name, leagues) !== null && isSeriesInWindow(s, now))
         .map((s) => {
           const start = parseSeriesDate(s.startDate, null);
           const end = parseSeriesDate(s.endDate, start);
@@ -168,13 +169,13 @@ async function syncCricket(supabase: SupabaseClient) {
   const { data: discovery } = await supabase.from('sport_feed_state').select('at').eq('key', 'cricket_discovery').maybeSingle();
   if (!discovery || now - Date.parse(discovery.at) > 12 * HOUR) {
     let all = true;
-    for (const search of CRICKET_SEARCHES) {
+    for (const search of leagueSearches(leagues)) {
       if (!await queue('discovery', search, 'series', { offset: '0', search })) all = false;
     }
     if (all) await supabase.from('sport_feed_state').upsert({ key: 'cricket_discovery', at: nowIso });
   }
 
-  // Each series' fixtures: every 45 minutes while one of its matches is about
+  // Each series' fixtures: every 60 minutes while one of its matches is about
   // to start or under way, otherwise every 6 hours.
   const { data: active } = await supabase
     .from('sport_events').select('competition, state, starts_at').eq('sport', 'cricket').in('state', ['open', 'closed']);
@@ -191,8 +192,10 @@ async function syncCricket(supabase: SupabaseClient) {
       continue;
     }
     if (start !== null && start > now + 8 * DAY) continue;
+    // A league switched off stops syncing, except for matches that still have bets to settle.
+    if (seriesLeague(s.name, leagues) === null && mine.length === 0) continue;
     const busy = mine.some((e) => e.state === 'closed' || Date.parse(e.starts_at) - now < 2 * HOUR);
-    const every = busy ? 45 * MINUTE : 6 * HOUR;
+    const every = busy ? 60 * MINUTE : 6 * HOUR;
     if (s.last_fetched_at && now - Date.parse(s.last_fetched_at) < every) continue;
     if (await queue('series', s.series_id, 'series_info', { id: s.series_id })) {
       await supabase.from('sport_feed_series')
@@ -228,7 +231,7 @@ Deno.serve(async (req) => {
 
   const { data: settings, error: settingsError } = await supabase
     .from('sport_settings')
-    .select('football_competitions')
+    .select('football_competitions, cricket_leagues')
     .eq('id', 1)
     .single();
   if (settingsError || !settings) return json({ error: settingsError?.message ?? 'No settings' }, 500);
@@ -253,7 +256,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const cricket = await syncCricket(supabase);
+    const cricket = await syncCricket(supabase, ((settings.cricket_leagues ?? []) as string[]).filter(isCricketLeague));
     const problem = cricket.problems.length ? cricket.problems.join('; ').slice(0, 480) : null;
     // Most runs read nothing (no series due), so keep the last count then.
     await supabase.rpc('sports_sync_record', {

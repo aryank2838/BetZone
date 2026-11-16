@@ -25,11 +25,21 @@ const FOOTBALL_COMPETITIONS: Array<{ code: string; name: string }> = [
   { code: 'WC', name: 'World Cup' },
 ];
 
+/** Cricket leagues the sync can follow (see cricketData.ts on the server). */
+const CRICKET_LEAGUES: Array<{ code: string; name: string }> = [
+  { code: 'india', name: 'India matches (men & women)' },
+  { code: 'ipl', name: 'IPL' },
+  { code: 'wbbl', name: "Women's Big Bash (WBBL)" },
+  { code: 'bbl', name: 'Big Bash League (BBL)' },
+  { code: 'wpl', name: "Women's Premier League (WPL)" },
+];
+
 interface SportSettings {
   football_enabled: boolean;
   cricket_enabled: boolean;
   fee_percent: number;
   football_competitions: string[];
+  cricket_leagues: string[];
   min_bet: number;
   max_bet: number;
   updated_at: string;
@@ -127,6 +137,7 @@ export default function SportsTab() {
         min_bet: draft.min_bet,
         max_bet: draft.max_bet,
         football_competitions: draft.football_competitions,
+        cricket_leagues: draft.cricket_leagues,
       },
     });
     setSaving(false);
@@ -166,6 +177,11 @@ export default function SportsTab() {
     const has = draft.football_competitions.includes(code);
     setDraft({ ...draft, football_competitions: has ? draft.football_competitions.filter((c) => c !== code) : [...draft.football_competitions, code] });
   };
+  const toggleLeague = (code: string) => {
+    if (!draft) return;
+    const leagues = draft.cricket_leagues ?? [];
+    setDraft({ ...draft, cricket_leagues: leagues.includes(code) ? leagues.filter((c) => c !== code) : [...leagues, code] });
+  };
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
   const open = events.filter((e) => e.state === 'open' || e.state === 'closed');
   const done = events.filter((e) => e.state === 'settled' || e.state === 'void');
@@ -199,10 +215,23 @@ export default function SportsTab() {
             <input type="checkbox" className="h-5 w-5" checked={draft.cricket_enabled}
               onChange={(e) => setDraft({ ...draft, cricket_enabled: e.target.checked })} />
           </label>
-          <p className="text-xs text-ink-muted">
-            Cricket covers India men&apos;s and women&apos;s senior matches and the IPL. Betting closes at the earliest
-            start time the feed gives. A tie or draw counts as No; a Super Over winner counts as the winner.
-          </p>
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-ink-soft">Cricket leagues</legend>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {CRICKET_LEAGUES.map((c) => (
+                <label key={c.code} className="flex items-center gap-2 text-sm text-ink-soft">
+                  <input type="checkbox" checked={(draft.cricket_leagues ?? []).includes(c.code)} onChange={() => toggleLeague(c.code)} />
+                  {c.name}
+                </label>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-ink-muted">
+              India series offer only India&apos;s matches (&quot;Will India win?&quot;); leagues offer every match
+              (&quot;Will the home team win?&quot;). The free cricket plan allows 100 calls a day, so switch on only the
+              leagues you need. Betting closes at the earliest start time the feed gives; a tie or draw counts as No and
+              a Super Over winner counts as the winner.
+            </p>
+          </fieldset>
 
           <fieldset>
             <legend className="mb-2 text-sm font-medium text-ink-soft">Football leagues</legend>

@@ -20,21 +20,45 @@ export interface CricMatch {
   matchEnded?: boolean | null;
 }
 
-/** Teams whose matches we offer, plus every IPL match. */
+/** In India series only India's matches are offered. */
 const OUR_TEAMS = new Set(['india', 'india women']);
 const DAY = 24 * 60 * 60 * 1000;
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
-export function isIplSeries(name: string) {
-  return /indian premier league/i.test(name);
+export type CricketLeague = 'india' | 'ipl' | 'wbbl' | 'bbl' | 'wpl';
+
+/**
+ * Leagues the admin can switch on. `search` is the cricketdata.org series
+ * search; in a league (not 'india') every match is offered.
+ */
+export const CRICKET_LEAGUES: Record<CricketLeague, { search: string; matches: (name: string) => boolean }> = {
+  india: {
+    search: 'India',
+    // India senior series (men or women). Skips A teams, youth and veterans cricket.
+    matches: (name) => /\bindia\b/i.test(name)
+      && !/\bU-?19\b|\bU-?23\b|\bA\b|\bemerging\b|\blegends\b|\bmasters\b/i.test(name),
+  },
+  ipl: { search: 'Indian Premier League', matches: (name) => /indian premier league/i.test(name) },
+  wbbl: { search: 'Big Bash', matches: (name) => /women'?s big bash/i.test(name) },
+  bbl: { search: 'Big Bash', matches: (name) => /big bash league/i.test(name) && !/women/i.test(name) },
+  wpl: { search: 'Womens Premier League', matches: (name) => /women'?s premier league/i.test(name) && !/indian/i.test(name) },
+};
+
+export function isCricketLeague(value: string): value is CricketLeague {
+  return Object.prototype.hasOwnProperty.call(CRICKET_LEAGUES, value);
 }
 
-/** India (men or women) senior series and the IPL. Skips A teams and youth cricket. */
-export function isWantedSeries(name: string) {
-  if (isIplSeries(name)) return true;
-  if (!/\bindia\b/i.test(name)) return false;
-  return !/\bU-?19\b|\bU-?23\b|\bA\b|\bemerging\b|\blegends\b|\bmasters\b/i.test(name);
+/** The league a series belongs to, among the given ones, or null. */
+export function seriesLeague(name: string, leagues: readonly CricketLeague[]): CricketLeague | null {
+  return leagues.find((league) => CRICKET_LEAGUES[league].matches(name)) ?? null;
 }
+
+/** Series searches needed for these leagues (WBBL and BBL share one). */
+export function leagueSearches(leagues: readonly CricketLeague[]): string[] {
+  return [...new Set(leagues.map((league) => CRICKET_LEAGUES[league].search))];
+}
+
+const ALL_LEAGUES = Object.keys(CRICKET_LEAGUES) as CricketLeague[];
 
 /** "2026-12-13", or "Dec 27" (year missing) resolved relative to the start date. */
 export function parseSeriesDate(value: string | null | undefined, startMs: number | null): number | null {
@@ -110,10 +134,13 @@ export function mapCricketMatch(match: CricMatch, series: { id: string; name: st
   if (teams.length !== 2 || teams.some((t) => !t || /^tbc$|^tba$/i.test(t.trim()))) return null;
   const home = teams[0].trim();
   const away = teams[1].trim();
-  const ipl = isIplSeries(series.name);
+  const league = seriesLeague(series.name, ALL_LEAGUES);
+  if (!league) return null;
+  // In a league every match is offered and the question is about the home team.
+  const allMatches = league !== 'india';
   const homeOurs = OUR_TEAMS.has(norm(home));
   const awayOurs = OUR_TEAMS.has(norm(away));
-  if (!ipl && !homeOurs && !awayOurs) return null;
+  if (!allMatches && !homeOurs && !awayOurs) return null;
   const startMs = cricketStartMs(match);
   if (startMs === null) return null;
 
@@ -137,7 +164,7 @@ export function mapCricketMatch(match: CricMatch, series: { id: string; name: st
     competition_name: series.name,
     home_team: home,
     away_team: away,
-    subject_side: !ipl && awayOurs && !homeOurs ? 'away' : 'home',
+    subject_side: !allMatches && awayOurs && !homeOurs ? 'away' : 'home',
     starts_at: new Date(startMs).toISOString(),
     status,
     home_score: null,

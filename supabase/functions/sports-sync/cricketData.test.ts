@@ -1,23 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cricketResult, cricketStartMs, isSeriesInWindow, isWantedSeries, mapCricketMatch, parseSeriesDate,
+  cricketResult, cricketStartMs, isSeriesInWindow, leagueSearches, mapCricketMatch, parseSeriesDate, seriesLeague,
+  type CricketLeague,
 } from './cricketData';
 
 const NZ = { id: '9f0a2527-1508-42b3-9945-4ade13fd4b5a', name: 'India tour of New Zealand 2026' };
 const teams: [string, string] = ['New Zealand', 'India'];
+const ALL: CricketLeague[] = ['india', 'ipl', 'wbbl', 'bbl', 'wpl'];
 
-describe('isWantedSeries', () => {
-  it('keeps India senior series and the IPL', () => {
-    expect(isWantedSeries('India tour of New Zealand 2026')).toBe(true);
-    expect(isWantedSeries('Sri Lanka tour of India, 2026')).toBe(true);
-    expect(isWantedSeries('India Women tour of South Africa, 2026')).toBe(true);
-    expect(isWantedSeries('Indian Premier League 2027')).toBe(true);
+describe('seriesLeague', () => {
+  it('finds India senior series and each league', () => {
+    expect(seriesLeague('India tour of New Zealand 2026', ALL)).toBe('india');
+    expect(seriesLeague('Sri Lanka tour of India, 2026', ALL)).toBe('india');
+    expect(seriesLeague('India Women tour of South Africa, 2026', ALL)).toBe('india');
+    expect(seriesLeague('Indian Premier League 2027', ALL)).toBe('ipl');
+    expect(seriesLeague('Womens Big Bash League 2026', ALL)).toBe('wbbl');
+    expect(seriesLeague('Big Bash League 2026-27', ALL)).toBe('bbl');
+    expect(seriesLeague('Womens Premier League 2027', ALL)).toBe('wpl');
   });
-  it('skips A teams and youth cricket', () => {
-    expect(isWantedSeries('India A tour of Nepal, 2026')).toBe(false);
-    expect(isWantedSeries('England A Women tour of India 2026')).toBe(false);
-    expect(isWantedSeries('England Women U19 tour of India 2026')).toBe(false);
-    expect(isWantedSeries('Pakistan tour of England')).toBe(false);
+  it('skips A teams, youth cricket, other series and leagues that are off', () => {
+    expect(seriesLeague('India A tour of Nepal, 2026', ALL)).toBeNull();
+    expect(seriesLeague('England A Women tour of India 2026', ALL)).toBeNull();
+    expect(seriesLeague('England Women U19 tour of India 2026', ALL)).toBeNull();
+    expect(seriesLeague('Pakistan tour of England', ALL)).toBeNull();
+    expect(seriesLeague('Big Bash League 2026-27', ['india', 'ipl', 'wbbl'])).toBeNull();
+  });
+  it('searches once for WBBL and BBL together', () => {
+    expect(leagueSearches(['india', 'wbbl', 'bbl'])).toEqual(['India', 'Big Bash']);
   });
 });
 
@@ -98,5 +107,7 @@ describe('mapCricketMatch', () => {
     expect(mapCricketMatch({ id: 'x', dateTimeGMT: '2027-01-08T03:30:00', teams: ['Tbc', 'Tbc'] }, NZ)).toBeNull();
     expect(mapCricketMatch({ id: 'x', dateTimeGMT: '2027-04-01T14:00:00', teams: ['Mumbai Indians', 'Chennai Super Kings'] },
       { id: 'ipl', name: 'Indian Premier League 2027' })).toMatchObject({ subject_side: 'home', home_team: 'Mumbai Indians' });
+    expect(mapCricketMatch({ id: 'w', dateTimeGMT: '2026-11-20T08:10:00', teams: ['Sydney Sixers Women', 'Perth Scorchers Women'] },
+      { id: 'wbbl', name: 'Womens Big Bash League 2026' })).toMatchObject({ subject_side: 'home', home_team: 'Sydney Sixers Women' });
   });
 });
