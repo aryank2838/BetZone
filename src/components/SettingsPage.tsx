@@ -6,6 +6,7 @@ import { friendlyErrorDetails } from '@/lib/errors';
 import type { NavView } from '@/lib/useNav';
 import HelpButton from '@/components/HelpButton';
 import LanguageSelector from '@/components/LanguageSelector';
+import InstallAppCard from '@/components/InstallAppCard';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, SectionTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -81,6 +82,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (view: NavVie
       <PageHeader title={t('account.title')} subtitle={user?.email} />
       <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 sm:px-5">
         {error && <Alert details={error.raw}>{error.text}</Alert>}
+
+        <InstallAppCard />
 
         <Card className="space-y-3">
           <SectionTitle>{t('settings.displayName')}</SectionTitle>

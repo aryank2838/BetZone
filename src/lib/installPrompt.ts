@@ -51,30 +51,61 @@ export function isIosSafari(userAgent = typeof navigator === 'undefined' ? '' : 
   return ios && !otherBrowser;
 }
 
-function readDismissed() {
-  try { return localStorage.getItem(DISMISS_KEY) === '1'; } catch { return false; }
+/**
+ * Browsers built into other apps (WhatsApp, Instagram, Facebook, Android
+ * WebViews) cannot install web apps; the player has to open the link in Chrome.
+ */
+export function isInAppBrowser(userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent): boolean {
+  return /WhatsApp|Instagram|FBAN|FBAV|FB_IAB|Line\/|Snapchat|; wv\)/i.test(userAgent);
 }
 
-export function useInstallPrompt() {
+/** Re-renders the caller when the browser's install offer appears or goes away. */
+function useInstallEvents() {
   const [, setTick] = useState(0);
-  const [dismissed, setDismissed] = useState(readDismissed);
   useEffect(() => {
     const listener = () => setTick((value) => value + 1);
     listeners.add(listener);
     return () => { listeners.delete(listener); };
   }, []);
+}
+
+async function promptInstall(): Promise<'accepted' | 'dismissed' | null> {
+  const event = deferred;
+  if (!event) return null;
+  await event.prompt();
+  const choice = await event.userChoice;
+  deferred = null;
+  notify();
+  return choice.outcome;
+}
+
+/**
+ * For the Account page: always available, whatever the Home banner's
+ * "Not now" said. 'installed' when running as the installed app.
+ */
+export function useInstallOptions() {
+  useInstallEvents();
+  const mode: 'installed' | 'prompt' | 'ios' | 'in-app' | 'manual' = isStandalone() ? 'installed'
+    : deferred ? 'prompt'
+      : isInAppBrowser() ? 'in-app'
+        : isIosSafari() ? 'ios'
+          : 'manual';
+  return { mode, install: promptInstall };
+}
+
+function readDismissed() {
+  try { return localStorage.getItem(DISMISS_KEY) === '1'; } catch { return false; }
+}
+
+export function useInstallPrompt() {
+  useInstallEvents();
+  const [dismissed, setDismissed] = useState(readDismissed);
 
   const standalone = isStandalone();
   const mode: 'prompt' | 'ios' | null = standalone || dismissed ? null : deferred ? 'prompt' : isIosSafari() ? 'ios' : null;
 
   const install = async () => {
-    const event = deferred;
-    if (!event) return;
-    await event.prompt();
-    const choice = await event.userChoice;
-    deferred = null;
-    if (choice.outcome === 'dismissed') dismiss();
-    notify();
+    if (await promptInstall() === 'dismissed') dismiss();
   };
   const dismiss = () => {
     try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* storage blocked */ }
