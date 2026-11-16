@@ -69,8 +69,8 @@ BEGIN
   SELECT count(*) INTO v_bonus_count
   FROM public.point_ledger
   WHERE user_id = v_unconfirmed AND reason = 'signup_bonus';
-  IF v_points <> 10 OR v_bonus_count <> 1 THEN
-    RAISE EXCEPTION 'email confirmation did not grant exactly one bonus: balance %, rows %', v_points, v_bonus_count;
+  IF v_points <> 0 OR v_bonus_count <> 0 THEN
+    RAISE EXCEPTION 'email confirmation granted a signup bonus: balance %, rows %', v_points, v_bonus_count;
   END IF;
 
   INSERT INTO auth.users (
@@ -87,8 +87,8 @@ BEGIN
   SELECT count(*) INTO v_bonus_count
   FROM public.point_ledger
   WHERE user_id = v_confirmed AND reason = 'signup_bonus';
-  IF v_points <> 10 OR v_bonus_count <> 1 THEN
-    RAISE EXCEPTION 'confirmed-at-insert signup did not receive exactly one bonus: balance %, rows %', v_points, v_bonus_count;
+  IF v_points <> 0 OR v_bonus_count <> 0 THEN
+    RAISE EXCEPTION 'confirmed-at-insert signup received a signup bonus: balance %, rows %', v_points, v_bonus_count;
   END IF;
 
   v_error := NULL;
@@ -143,6 +143,24 @@ BEGIN
   END;
   IF v_error IS NULL OR v_error NOT ILIKE '%EMAIL_DOMAIN_BLOCKED%' THEN
     RAISE EXCEPTION 'blocked parent email domain was not rejected: %', v_error;
+  END IF;
+
+  v_error := NULL;
+  BEGIN
+    INSERT INTO auth.users (
+      id, aud, role, email, encrypted_password, email_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data
+    )
+    VALUES (
+      '00000000-0000-4000-8000-000000000107',
+      'authenticated', 'authenticated',
+      'user@10minutemail.net', '', NULL, '{}', '{}'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT;
+  END;
+  IF v_error IS NULL OR v_error NOT ILIKE '%EMAIL_DOMAIN_BLOCKED%' THEN
+    RAISE EXCEPTION 'domain from the imported throwaway list was not rejected: %', v_error;
   END IF;
 
   IF has_table_privilege('anon', 'public.blocked_email_domains', 'SELECT')

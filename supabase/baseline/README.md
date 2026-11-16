@@ -24,7 +24,7 @@ User RPCs handle submitting selections, reading status/balances/results/settings
 
 All public `SECURITY DEFINER` functions must use `search_path = public, pg_temp`. Authenticated user functions reject unauthenticated callers and have explicit execution grants; internal payout and locking functions are not client-callable.
 
-Signup email addresses are normalized and checked against the existing profiles and blocked-domain list before an Auth user is inserted. New profiles start with zero play balance; the 10-unit signup bonus is recorded exactly once after email confirmation.
+Signup email addresses are normalized and checked against the existing profiles and blocked-domain list before an Auth user is inserted. New profiles start with zero play balance and get no signup bonus; the first approved deposit adds a one-time `first_deposit_bonus` of 5% (at least 10) when it is 50 or more.
 
 ## Storage
 

@@ -195,7 +195,7 @@ q "
   INSERT INTO public.point_ledger (user_id, delta, reason, metadata)
   VALUES ('$USER_B', -10, 'selection_submit', jsonb_build_object('game', '$SETTLE_GAME', 'bet_type', 'single_open', 'round_date', '$TODAY'));
 " >/dev/null
-# Balance minus ledger sum before the race (the signup bonus makes this non-zero).
+# Balance minus ledger sum before the race (fixture balances can make this non-zero).
 BALANCE_GAP_B=$(q "SELECT (SELECT points + wallet FROM public.profiles WHERE id = '$USER_B') - (SELECT COALESCE(SUM(delta), 0) FROM public.point_ledger WHERE user_id = '$USER_B')")
 PGAPPNAME=cc_settler psql "$DB_URL" -X -q -t -A -v ON_ERROR_STOP=1 -c "
   SET application_name = 'cc_settler';

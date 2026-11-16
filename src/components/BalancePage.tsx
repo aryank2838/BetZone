@@ -168,6 +168,7 @@ export default function BalancePage({ initialTab = 'add', onBalanceChanged, onOp
             breakdown ? (
               <AddMoneyPanel
                 maxAmount={breakdown.max_add_funds_amount}
+                firstDepositBonusAvailable={breakdown.first_deposit_bonus_available === true}
                 merchantUpiId={merchantUpiId}
                 merchantName={merchantName}
                 selfExcludedUntil={selfExcludedUntil}

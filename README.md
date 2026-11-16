@@ -33,6 +33,7 @@ supabase db reset
 DB=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/database_regressions.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/signup_protection.sql
+psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/first_deposit_bonus.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/function_privilege_audit.sql
 DATABASE_URL="$DB" bash supabase/tests/concurrency.sh
 ```
@@ -130,7 +131,7 @@ The app includes an install manifest with PNG icons (192, 512, maskable 512), a 
 
 ## Signup protection
 
-Signup protection uses email confirmation, normalized-email uniqueness, a disposable-domain blocklist, and Supabase Auth rate limits. The 10-balance signup bonus is credited once after email confirmation. The email-normalization migration emits a database `NOTICE` listing any pre-existing normalized duplicates and creates a post-migration partial unique index instead of failing; review that notice and resolve any existing duplicates before replacing the partial index with a full unique index.
+Signup protection uses email confirmation, normalized-email uniqueness, a disposable-domain blocklist, and Supabase Auth rate limits. There is no signup bonus: new accounts start at 0. Instead, when an admin approves a user's first deposit, the user gets 5% of it as bonus play points (at least 10, no cap; first deposits under 50 get none), recorded as a `first_deposit_bonus` ledger row. The blocklist includes about 10,000 domains from the public disposable-email-domains list. The email-normalization migration emits a database `NOTICE` listing any pre-existing normalized duplicates and creates a post-migration partial unique index instead of failing; review that notice and resolve any existing duplicates before replacing the partial index with a full unique index.
 
 In the Supabase Dashboard, open **Authentication → Rate Limits** and set:
 

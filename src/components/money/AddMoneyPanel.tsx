@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { formatLimitEnd } from '@/lib/useMyLimits';
+import { firstDepositBonus } from '@/lib/firstDepositBonus';
 import { MAX_ORIGINAL_BYTES, MAX_UPLOAD_BYTES, shrinkImage } from '@/lib/shrinkImage';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
@@ -27,9 +28,10 @@ function StepLabel({ step, htmlFor, children, required }: { step: number; htmlFo
 }
 
 export default function AddMoneyPanel({
-  maxAmount, merchantUpiId, merchantName, selfExcludedUntil, hasPendingDeposit, approvalTimeNote, onOpenAdminSettings, onSubmitted,
+  maxAmount, firstDepositBonusAvailable = false, merchantUpiId, merchantName, selfExcludedUntil, hasPendingDeposit, approvalTimeNote, onOpenAdminSettings, onSubmitted,
 }: {
   maxAmount: number;
+  firstDepositBonusAvailable?: boolean;
   merchantUpiId: string;
   merchantName: string;
   selfExcludedUntil: string | null;
@@ -202,6 +204,15 @@ export default function AddMoneyPanel({
             className={INPUT}
           />
           <p className="mt-1.5 text-xs text-ink-muted">{interpolate(t('money.addLimit'), { max: formatNumber(maxAmount) })}</p>
+          {firstDepositBonusAvailable && (
+            <p className="mt-1.5 text-xs font-medium text-amber-300">
+              {!amountValid
+                ? t('money.firstDepositOffer')
+                : firstDepositBonus(amountValue) > 0
+                  ? interpolate(t('money.firstDepositPreview'), { bonus: formatNumber(firstDepositBonus(amountValue)) })
+                  : t('money.firstDepositTooSmall')}
+            </p>
+          )}
         </div>
 
         {!amountValid && (

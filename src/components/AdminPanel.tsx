@@ -598,8 +598,12 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
   const handleAddFunds = async (id: string, status: 'approved' | 'rejected', reason?: string) => {
     setProcessingId(id);
     try {
-      const { error } = await supabase.rpc('admin_process_add_funds', { p_request_id: id, p_new_status: status, p_reason: reason ?? null });
+      const { data, error } = await supabase.rpc('admin_process_add_funds', { p_request_id: id, p_new_status: status, p_reason: reason ?? null });
       if (error) throw error;
+      const result = data as { amount?: number; bonus?: number } | null;
+      if (status === 'approved' && result?.bonus) {
+        setMessage({ kind: 'ok', text: `Credited ${result.amount} + ${result.bonus} first-deposit bonus.` });
+      }
       await loadWithdrawals(); await loadStats(); void alerts?.refresh();
     } catch (err) { setMessage(errorNotice(err)); }
     finally { setProcessingId(null); }
