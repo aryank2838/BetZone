@@ -8,6 +8,7 @@ const { authMock } = vi.hoisted(() => ({
     signUp: vi.fn(),
     signInWithPassword: vi.fn(),
     resend: vi.fn(),
+    verifyOtp: vi.fn(),
   },
 }));
 
@@ -40,8 +41,12 @@ describe('AuthScreen signup confirmation', () => {
     expect(authMock.signUp).toHaveBeenCalledWith({
       email: 'test@example.com',
       password: 'password123',
-      options: { data: { display_name: 'Test User', accepted_terms: true, terms_version: TERMS_VERSION } },
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: { display_name: 'Test User', accepted_terms: true, terms_version: TERMS_VERSION },
+      },
     });
+    expect(screen.getByText('One more step: confirm your email')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Resend email (60s)' })).toBeDisabled();
 
     for (let second = 0; second < 60; second += 1) {
@@ -56,7 +61,11 @@ describe('AuthScreen signup confirmation', () => {
     });
 
     expect(authMock.resend).toHaveBeenCalledTimes(1);
-    expect(authMock.resend).toHaveBeenCalledWith({ type: 'signup', email: 'test@example.com' });
+    expect(authMock.resend).toHaveBeenCalledWith({
+      type: 'signup',
+      email: 'test@example.com',
+      options: { emailRedirectTo: window.location.origin },
+    });
     expect(screen.getByRole('button', { name: 'Resend email (60s)' })).toBeDisabled();
   });
 });
@@ -78,4 +87,40 @@ it('submits the expected sign-in credentials', async () => {
     email: 'test@example.com',
     password: 'password123',
   });
+});
+
+it('explains an unconfirmed email on login and offers a resend', async () => {
+  authMock.signInWithPassword.mockResolvedValue({ error: { code: 'email_not_confirmed', message: 'Email not confirmed' } });
+  authMock.resend.mockResolvedValue({ error: null });
+  render(<AuthScreen />);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Log in' })[0]);
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'test@example.com' } });
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } });
+  const loginForm = screen.getByLabelText('Email').closest('form')!;
+  await act(async () => {
+    fireEvent.click(within(loginForm).getByRole('button', { name: 'Log in' }));
+  });
+
+  expect(screen.getByRole('alert')).toHaveTextContent(/isn't confirmed yet/);
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Resend email' }));
+  });
+  expect(authMock.resend).toHaveBeenCalledWith(expect.objectContaining({ type: 'signup', email: 'test@example.com' }));
+});
+
+it('explains an expired confirmation link instead of failing silently', async () => {
+  window.history.replaceState(null, '', '/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+  render(<AuthScreen />);
+  expect(await screen.findByRole('alert')).toHaveTextContent(/expired or was already used/);
+  expect(screen.getByText('Email link is invalid or has expired')).toBeInTheDocument();
+  expect(window.location.hash).toBe('');
+});
+
+it('confirms the email from a token_hash link', async () => {
+  authMock.verifyOtp.mockResolvedValue({ error: null });
+  window.history.replaceState(null, '', '/?token_hash=abc123&type=signup');
+  render(<AuthScreen />);
+  expect(await screen.findByText('Your email is confirmed. Log in to continue.')).toBeInTheDocument();
+  expect(authMock.verifyOtp).toHaveBeenCalledWith({ token_hash: 'abc123', type: 'signup' });
+  expect(window.location.search).toBe('');
 });

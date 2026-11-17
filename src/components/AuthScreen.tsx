@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
-import { Loader2, Zap, ArrowRight, Trophy, Wallet, TrendingUp } from 'lucide-react';
+import { Loader2, Zap, ArrowRight, Trophy, Wallet, TrendingUp, MailCheck } from 'lucide-react';
+import { authRedirectUrl, consumeAuthRedirect, isEmailNotConfirmedError } from '@/lib/authRedirect';
 import LegalPage, { type LegalDocument } from '@/components/LegalPage';
 import LanguageSelector from '@/components/LanguageSelector';
 import InstallBanner from '@/components/InstallBanner';
@@ -24,12 +25,41 @@ export default function AuthScreen() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [confirmationPending, setConfirmationPending] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState('');
+  // Show "Resend email" (on either tab) for confirmationEmail or the typed email.
+  const [canResend, setCanResend] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(null);
   const nextConfirmationEmailAt = useRef(0);
   const requestInFlight = useRef(false);
 
   const isSignup = mode === 'signup';
+
+  // Back from an email link: say what happened instead of failing silently.
+  useEffect(() => {
+    const redirect = consumeAuthRedirect();
+    if (redirect.error) {
+      setMode('login');
+      setCanResend(true);
+      setError(t('auth.linkExpired'));
+      setErrorDetails(redirect.error.description);
+      return;
+    }
+    if (redirect.tokenHash) {
+      setMode('login');
+      setBusy(true);
+      void supabase.auth.verifyOtp(redirect.tokenHash).then(({ error: verifyError }) => {
+        if (verifyError) {
+          setCanResend(true);
+          setError(t('auth.linkExpired'));
+          setErrorDetails(rawErrorMessage(verifyError));
+        } else {
+          setNotice(t('auth.emailConfirmed'));
+        }
+      }).finally(() => setBusy(false));
+    }
+    // Runs once on mount; `t` only picks the message language.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -81,14 +111,17 @@ export default function AuthScreen() {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: { data: { display_name: name.trim(), accepted_terms: true, terms_version: TERMS_VERSION } },
+          options: {
+            emailRedirectTo: authRedirectUrl(),
+            data: { display_name: name.trim(), accepted_terms: true, terms_version: TERMS_VERSION },
+          },
         });
         if (signUpError) throw signUpError;
         if (!data.session) {
           setConfirmationPending(true);
           setConfirmationEmail(email.trim());
+          setCanResend(true);
           startResendCooldown();
-          setNotice(t('auth.checkEmail'));
         }
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -98,6 +131,12 @@ export default function AuthScreen() {
         if (signInError) throw signInError;
       }
     } catch (err) {
+      if (!isSignup && isEmailNotConfirmedError(err)) {
+        setConfirmationEmail(email.trim());
+        setCanResend(true);
+        setError(t('auth.emailNotConfirmed'));
+        return;
+      }
       const friendly = friendlyError(err);
       setError(friendly.message);
       setErrorDetails(friendly.key === 'errors.generic' ? rawErrorMessage(err) : '');
@@ -118,7 +157,7 @@ export default function AuthScreen() {
     setBusy(true);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: import.meta.env.VITE_SITE_URL || window.location.origin,
+        redirectTo: authRedirectUrl(),
       });
       if (resetError) throw resetError;
     } catch {
@@ -130,7 +169,13 @@ export default function AuthScreen() {
   };
 
   const handleResendEmail = async () => {
-    if (!confirmationEmail || requestInFlight.current || Date.now() < nextConfirmationEmailAt.current) return;
+    const target = confirmationEmail || email.trim();
+    if (!target) {
+      setError(t('auth.enterEmail'));
+      return;
+    }
+    if (requestInFlight.current || Date.now() < nextConfirmationEmailAt.current) return;
+    setConfirmationEmail(target);
     setError('');
     setErrorDetails('');
     setNotice('');
@@ -140,7 +185,8 @@ export default function AuthScreen() {
     try {
       const { error: resendError } = await supabase.auth.resend({
         type: 'signup',
-        email: confirmationEmail,
+        email: target,
+        options: { emailRedirectTo: authRedirectUrl() },
       });
       if (resendError) throw resendError;
       setNotice(t('auth.confirmationResent'));
@@ -160,8 +206,26 @@ export default function AuthScreen() {
     setErrorDetails('');
     setNotice('');
     setConfirmationPending(false);
+    setCanResend(false);
     setAcceptedTerms(false);
   };
+
+  const goToLoginAfterSignup = () => {
+    changeMode('login');
+    setEmail(confirmationEmail);
+    setPassword('');
+  };
+
+  const resendButton = canResend && (
+    <button
+      type="button"
+      onClick={() => { void handleResendEmail(); }}
+      disabled={busy || resendCooldown > 0}
+      className="min-h-[44px] w-full text-sm text-cyan-400 hover:text-cyan-300 disabled:text-slate-400 disabled:opacity-70 disabled:cursor-not-allowed"
+    >
+      {resendCooldown > 0 ? interpolate(t('auth.resendIn'), { seconds: resendCooldown }) : t('auth.resend')}
+    </button>
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-5 py-10 relative overflow-hidden">
@@ -222,6 +286,43 @@ export default function AuthScreen() {
           </button>
         </div>
 
+        {confirmationPending && isSignup ? (
+          <div className="space-y-5 animate-fade-in" role="status">
+            <div className="rounded-xl border border-emerald-900 bg-emerald-950/40 p-4">
+              <div className="flex items-center gap-2 text-emerald-300">
+                <MailCheck className="h-5 w-5 shrink-0" />
+                <h2 className="text-base font-semibold">{t('auth.confirmTitle')}</h2>
+              </div>
+              <p className="mt-2 text-sm text-slate-300 break-words">
+                {interpolate(t('auth.confirmSentTo'), { email: confirmationEmail })}
+              </p>
+              <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-200">
+                <li>{t('auth.confirmStep1')}</li>
+                <li>{t('auth.confirmStep2')}</li>
+                <li>{t('auth.confirmStep3')}</li>
+              </ol>
+              <p className="mt-3 text-xs text-amber-300">{t('auth.confirmLatestOnly')}</p>
+            </div>
+            {error && (
+              <div role="alert" className="text-sm text-rose-400 bg-rose-950/40 border border-rose-900 rounded-lg px-3 py-2">
+                <p>{error}</p>
+                {errorDetails && <p className="mt-1 text-xs text-rose-400/70">{errorDetails}</p>}
+              </div>
+            )}
+            {notice && (
+              <p className="text-sm text-emerald-400 bg-emerald-950/40 border border-emerald-900 rounded-lg px-3 py-2">{notice}</p>
+            )}
+            <button
+              type="button"
+              onClick={goToLoginAfterSignup}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-semibold hover:from-emerald-400 hover:to-cyan-400 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+            >
+              {t('auth.confirmedGoLogin')}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            {resendButton}
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
           {isSignup && (
             <div className="animate-fade-in">
@@ -259,7 +360,7 @@ export default function AuthScreen() {
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setConfirmationEmail(''); }}
               readOnly={confirmationPending}
               placeholder="you@example.com"
               autoComplete="email"
@@ -298,7 +399,7 @@ export default function AuthScreen() {
 
           <button
             type="submit"
-            disabled={busy || (isSignup && confirmationPending)}
+            disabled={busy}
             className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-semibold hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
           >
             {busy ? (
@@ -310,17 +411,9 @@ export default function AuthScreen() {
               </>
             )}
           </button>
-          {confirmationPending && isSignup && (
-            <button
-              type="button"
-              onClick={() => { void handleResendEmail(); }}
-              disabled={busy || resendCooldown > 0 || !confirmationEmail}
-              className="min-h-[44px] w-full text-sm text-cyan-400 hover:text-cyan-300 disabled:text-slate-400 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {resendCooldown > 0 ? interpolate(t('auth.resendIn'), { seconds: resendCooldown }) : t('auth.resend')}
-            </button>
-          )}
+          {resendButton}
         </form>
+        )}
 
         <p className="text-xs text-slate-400 text-center mt-7">
           {t('auth.starterBonus')}
