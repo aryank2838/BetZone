@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
-import { useNav, type NavView } from '@/lib/useNav';
+import { useNav, viewForOpenLink, type NavView } from '@/lib/useNav';
+import { syncPush } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import type { Game, GameResult } from '@/types';
 import { useGameStatus } from '@/lib/useGameStatus';
@@ -79,9 +80,30 @@ function DashboardContent({ nav, navigate, goHome, adminTarget, openAdmin }: {
   openAdmin: (tab: AdminTab, game?: Game) => void;
 }) {
   const { user, profile, refreshProfile } = useAuth();
-  const { t } = useT();
+  const { t, language } = useT();
   const toast = useToast();
   const noticeText = useNoticeText();
+
+  // Keep this device's notification subscription and language current.
+  useEffect(() => {
+    syncPush(language).catch(() => { /* retried on next app open */ });
+  }, [language]);
+
+  // A tapped notification while the app is open: go to the matching screen.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; url?: unknown } | null;
+      if (data?.type !== 'open-url' || typeof data.url !== 'string') return;
+      const view = viewForOpenLink(data.url);
+      if (!view) return;
+      setMoneyTab(null);
+      navigate({ view, game: null });
+      void refreshProfile();
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [navigate, refreshProfile]);
   const [moneyTab, setMoneyTab] = useState<MoneyTab | null>(null);
   const { notices, dismiss: dismissNotices } = useMoneyNotices((fresh: MoneyNotice[]) => {
     // Live update while the app is open: a toast, plus the card on Home.

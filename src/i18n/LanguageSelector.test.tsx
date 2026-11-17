@@ -26,7 +26,7 @@ describe('language selector', () => {
     );
     expect(screen.getByText('Pick numbers. Win big. Play smart.')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), { target: { value: 'hi' } });
-    expect(screen.getByText('नंबर चुनें। जीतें। समझदारी से खेलें।')).toBeInTheDocument();
+    expect(screen.getByText('नंबर चुनें। बड़ा जीतें। समझदारी से खेलें।')).toBeInTheDocument();
     expect(localStorage.getItem('betzone_language')).toBe('hi');
   });
 });

@@ -527,7 +527,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
                       value={manualPatti}
                       onChange={(event) => setManualPatti(event.target.value.replace(/\D/g, '').slice(0, 3))}
                       onKeyDown={(event) => { if (event.key === 'Enter') handlePattiAdd(); }}
-                      placeholder="e.g. 123"
+                      placeholder={interpolate(t('common.example'), { value: '123' })}
                       maxLength={3}
                       className={`${INPUT} mt-1 w-full`}
                     />
@@ -541,7 +541,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
                       value={manualDigit}
                       onChange={(event) => setManualDigit(event.target.value.replace(/\D/g, '').slice(0, 1))}
                       onKeyDown={(event) => { if (event.key === 'Enter') handlePattiAdd(); }}
-                      placeholder="e.g. 6"
+                      placeholder={interpolate(t('common.example'), { value: '6' })}
                       maxLength={1}
                       className={`${INPUT} mt-1 w-full`}
                     />

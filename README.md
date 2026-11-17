@@ -62,7 +62,7 @@ Signup and existing accounts require age confirmation and acceptance of the Term
 
 The inactivity timeout is 30 minutes, with a warning during the final 60 seconds. Activity is handled at most once per second and shared across tabs through `localStorage`, so an idle tab does not sign out a session that is active in another tab. Profile refreshes (after a bet, a request status change, or supabase-js re-emitting `SIGNED_IN` when a tab regains focus) update data in the background and never unmount the current screen or clear half-filled forms.
 
-English, Hindi, and Marathi dictionaries and selectors are included; Hindi and Marathi are machine-translated drafts requiring native-speaker review. The sign-in screen, dashboard and bet slip are translated; other screens still contain English strings. The language choice is stored in `localStorage` when available (the app still works if storage is blocked) and sets `<html lang>`. Numbers and dates re-render in the selected locale.
+English, Hindi, and Marathi are included. Every player screen is translated; the Terms and Privacy Policy and the admin panel stay in English. Hindi and Marathi use everyday wording with the English words players already use (बेट, बैलेंस/बॅलन्स, UPI, UTR); each file starts with its glossary, so new text should follow it. The language choice is stored in `localStorage` when available (the app still works if storage is blocked) and sets `<html lang>`. Numbers and dates re-render in the selected locale.
 
 Users can contact configured support channels or create a problem report through Help. Admins review and close support tickets from the Support tab.
 
@@ -134,6 +134,21 @@ Everything runs automatically through the `sports-sync` Edge Function, which pg_
 3. Vault secrets used by the cron job: `select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/sports-sync', 'sports_sync_url');` and `select vault.create_secret('<same random>', 'sports_cron_secret');`.
 4. Cricket (cricketdata.org, 100 calls a day free): store the key in Vault with `select vault.create_secret('<key>', 'cricket_api_key');`. cricketdata.org resets connections from the Edge Function network, so the function asks the database to send cricket requests through pg_net (`cricket_http_get`) and reads the replies on its next run (`cricket_http_result`, which strips the echoed key and deletes the reply). The admin picks the cricket leagues in Admin → More → Sports (`sport_settings.cricket_leagues`: India senior matches, IPL, WBBL, BBL, WPL; India, IPL and WBBL start on). India series offer only India's matches; leagues offer every match, asking about the home team. The sync searches for those series twice a day (again straight after the leagues change). After each fetch it sets the series' `next_check_at` from its matches' formats and start times (`nextCricketCheck`): every 6 hours when nothing is close, hourly in the 2 hours before a start, every 2 hours during a match until it could be finishing (T20 2¾ h, ODI 6½ h, Test day 3), then every 15 minutes (Tests 30), and 15 minutes after a result until it is paid. It stops at 90 calls a day. Replies usually arrive in about 20 seconds, so the function waits for them in the same run. A cricket result is paid after it has been seen for 15 minutes (football 30). The winner is read from the result text ("India won by 22 runs"); ties and draws count as No, a Super Over winner counts as the winner, no result or abandoned is refunded, and unrecognised text is left for the admin to settle by hand. Betting closes at the earlier of `dateTimeGMT` and the start time in the status text, because the two sometimes differ. A match with no result is refunded after 7 days (Tests last up to 5).
 5. Turn football and cricket on in Admin → More → Sports. That screen shows the last sync, the pools per match, and buttons to refund a match or settle it by hand if the automatic result gets stuck.
+
+## Push notifications
+
+Players can turn on notifications per device in Account → Notifications (or from the prompt shown after an add-money or withdrawal request). They are told when an add-money request is approved or rejected, when a withdrawal is sent or rejected, and when winnings are paid (Matka and sports; several payouts from one result become one "You won ₹X"). Text is in the language the app was set to on that device. Tapping a notification opens Money or My bets (`/?open=money`, `/?open=bets`). Logging out turns notifications off for that device. On iPhone, Web Push only works after BetZone is added to the home screen (iOS 16.4+).
+
+How it works (`20261117200000_push_notifications.sql`): the device subscription is saved with `save_push_subscription` into `push_subscriptions`. Triggers on `add_funds_requests`, `withdrawals` and `point_ledger` (`winning_payout`) add rows to `push_outbox`, only for players with a subscription. pg_cron calls the `send-push` Edge Function every minute, but only while unsent rows exist. The function claims rows (`push_claim_outbox`), sends Web Push with VAPID (`supabase/functions/_shared/webpush.ts`, WebCrypto only), and removes expired subscriptions (`push_record_results`). Unsent rows older than 6 hours are dropped. Sending is free: browser push services do not charge.
+
+Setup:
+
+1. VAPID keys: the public key is `VAPID_PUBLIC_KEY` in `src/lib/push.ts`. Keep the private key out of git.
+2. Deploy the function: `supabase functions deploy send-push --no-verify-jwt` (it checks its own `x-cron-secret` header).
+3. Function secrets: `supabase secrets set VAPID_PUBLIC_KEY=<public> VAPID_PRIVATE_KEY=<private> VAPID_SUBJECT=https://<your-site> PUSH_CRON_SECRET=<random>`.
+4. Vault secrets used by the cron job: `select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/send-push', 'push_send_url');` and `select vault.create_secret('<same random>', 'push_cron_secret');`.
+
+To replace the VAPID keys, update the function secrets and `VAPID_PUBLIC_KEY` together; devices subscribe again with the new key the next time they open the app.
 
 ## Deployment
 

@@ -5,6 +5,7 @@ import { useFormat } from '@/i18n/useFormat';
 import { interpolate, useT } from '@/i18n/useT';
 import { Send } from 'lucide-react';
 import Alert from '@/components/ui/Alert';
+import { PushPrompt } from '@/components/PushNotifications';
 import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/toastContext';
 
@@ -38,6 +39,7 @@ export default function WithdrawalForm({ status, onSubmitted, onSubmittingChange
   const [upiId, setUpiId] = useState('');
   const [prefilledUpi, setPrefilledUpi] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [justSent, setJustSent] = useState(false);
 
   // Fill in the UPI ID from the player's last paid withdrawal, so they don't
   // retype it (and risk a typo) every time. Rejected requests are skipped in
@@ -113,6 +115,7 @@ export default function WithdrawalForm({ status, onSubmitted, onSubmittingChange
       if (rpcError) throw rpcError;
       setAmount('');
       toast.show(t('withdraw.sent'));
+      setJustSent(true);
       await onSubmitted();
     } catch (caught) {
       const friendly = friendlyError(caught);
@@ -128,6 +131,7 @@ export default function WithdrawalForm({ status, onSubmitted, onSubmittingChange
 
   return (
     <div className="space-y-4">
+      {justSent && <PushPrompt context="withdraw" />}
       {status && (
         <p className="text-sm text-ink-muted">
           {interpolate(t('withdraw.available'), { amount: rupees(status.wallet), min: rupees(status.min_withdrawal), max: rupees(status.max_withdrawal) })}
@@ -143,7 +147,7 @@ export default function WithdrawalForm({ status, onSubmitted, onSubmittingChange
           pattern="[0-9]*"
           value={amount}
           onChange={(event) => { setAmount(event.target.value); setError(null); }}
-          placeholder="e.g. 900"
+          placeholder={interpolate(t('common.example'), { value: '900' })}
           className={INPUT}
         />
       </div>

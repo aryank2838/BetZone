@@ -8,6 +8,7 @@ import { formatLimitEnd } from '@/lib/useMyLimits';
 import { firstDepositBonus } from '@/lib/firstDepositBonus';
 import { MAX_ORIGINAL_BYTES, MAX_UPLOAD_BYTES, shrinkImage } from '@/lib/shrinkImage';
 import Alert from '@/components/ui/Alert';
+import { PushPrompt } from '@/components/PushNotifications';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useToast } from '@/components/ui/toastContext';
@@ -49,6 +50,7 @@ export default function AddMoneyPanel({
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [justSent, setJustSent] = useState(false);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<{ text: string; raw?: string } | null>(null);
@@ -169,6 +171,7 @@ export default function AddMoneyPanel({
       setScreenshotFile(null);
       setScreenshotPreview(null);
       toast.show(t('money.addSubmitted'));
+      setJustSent(true);
       await onSubmitted();
     } catch (caught) {
       const friendly = friendlyError(caught);
@@ -190,6 +193,7 @@ export default function AddMoneyPanel({
 
   return (
     <div className="space-y-4">
+      {justSent && <PushPrompt context="deposit" />}
       {hasPendingDeposit && <Alert tone="info">{t('money.pendingDeposit')}</Alert>}
       {approvalTimeNote && <Alert tone="info">{approvalTimeNote}</Alert>}
 
@@ -291,7 +295,7 @@ export default function AddMoneyPanel({
             id="add-funds-reference"
             type="text" value={utr}
             onChange={(event) => { setUtr(event.target.value); setError(null); }}
-            placeholder="e.g. 412345678901"
+            placeholder={interpolate(t('common.example'), { value: '412345678901' })}
             className={INPUT}
           />
           <p className="mt-1.5 text-xs text-ink-muted">{t('money.utrHelp')}</p>

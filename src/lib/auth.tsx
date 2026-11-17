@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { disablePush } from '@/lib/push';
 import type { Profile } from '@/types';
 import { friendlyErrorDetails } from '@/lib/errors';
 import {
@@ -252,6 +253,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore */ }
     activityMemory.current = null;
     clearStoredActivity();
+    // A shared phone should not keep getting this player's notifications.
+    await disablePush().catch(() => { /* never block logging out */ });
     await supabase.auth.signOut();
   };
 

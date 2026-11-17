@@ -418,3 +418,6 @@ enabled = true
 # sports-sync is called by pg_cron, which sends a shared secret header instead of a user JWT.
 [functions.sports-sync]
 verify_jwt = false
+
+[functions.send-push]
+verify_jwt = false

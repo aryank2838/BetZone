@@ -20,7 +20,34 @@ function validNavState(value: unknown): value is NavState {
     && (nav.view !== 'game' || nav.game !== null);
 }
 
+/** Screens a notification link (`/?open=…`) can open. */
+const OPEN_TARGETS: Record<string, NavView> = { money: 'balance', bets: 'mybets', sports: 'sports' };
+
+export function viewForOpenLink(url: string): NavView | null {
+  try {
+    const open = new URL(url, 'https://app.invalid').searchParams.get('open');
+    return open ? OPEN_TARGETS[open] ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Reads and removes `?open=…` from the address bar (a tapped notification). */
+function consumeOpenLink(): NavView | null {
+  if (typeof window === 'undefined') return null;
+  const view = viewForOpenLink(window.location.href);
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('open')) {
+    params.delete('open');
+    const query = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+  }
+  return view;
+}
+
 function readSavedNav(): NavState {
+  const linked = consumeOpenLink();
+  if (linked) return { view: linked, game: null };
   try {
     const saved: unknown = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null');
     if (validNavState(saved)) return saved;
