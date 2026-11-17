@@ -23,7 +23,9 @@ UPDATE public.profiles SET points = 1000 WHERE id IN (
   '00000000-0000-4000-8000-000000000303',
   '00000000-0000-4000-8000-000000000304',
   '00000000-0000-4000-8000-000000000305');
-UPDATE public.sport_settings SET football_enabled = true, fee_percent = 10, min_bet = 10, max_bet = 500 WHERE id = 1;
+-- House money off for the first part; the house money section turns it on.
+UPDATE public.sport_settings SET football_enabled = true, fee_percent = 10, min_bet = 10, max_bet = 500,
+  house_seed = 0 WHERE id = 1;
 
 DO $test$
 DECLARE
@@ -35,6 +37,11 @@ DECLARE
   v_ev1 uuid;
   v_ev2 uuid;
   v_ev3 uuid;
+  v_h1 uuid;
+  v_h2 uuid;
+  v_h3 uuid;
+  v_u2_wallet integer;
+  v_u3_wallet integer;
   v_result jsonb;
   v_error text;
   v_points integer;
@@ -212,9 +219,115 @@ BEGIN
     RAISE EXCEPTION 'cancelled match was not refunded';
   END IF;
 
+  -- House money: 50 on each side, at most 2 matches a day.
+  UPDATE public.sport_settings SET house_seed = 50, house_seed_daily_matches = 2 WHERE id = 1;
+  INSERT INTO public.sport_events (sport, provider, provider_event_id, competition, competition_name,
+    home_team, away_team, starts_at, fee_percent)
+  VALUES ('football', 'test', 'h1', 'PL', 'Premier League', 'Fav FC', 'Under FC', now() + interval '1 day', 10)
+  RETURNING id INTO v_h1;
+  INSERT INTO public.sport_events (sport, provider, provider_event_id, competition, competition_name,
+    home_team, away_team, starts_at, fee_percent)
+  VALUES ('football', 'test', 'h2', 'PL', 'Premier League', 'Crowd FC', 'Upset FC', now() + interval '1 day', 10)
+  RETURNING id INTO v_h2;
+  INSERT INTO public.sport_events (sport, provider, provider_event_id, competition, competition_name,
+    home_team, away_team, starts_at, fee_percent)
+  VALUES ('football', 'test', 'h3', 'PL', 'Premier League', 'Late FC', 'Budget FC', now() + interval '1 day', 10)
+  RETURNING id INTO v_h3;
+
+  -- Before any bet the player list says the next match gets 50.
+  PERFORM set_config('request.jwt.claim.sub', v_u2::text, true);
+  IF (public.get_sport_events('football')->>'house_seed')::integer <> 50 THEN
+    RAISE EXCEPTION 'player list does not show the coming house money';
+  END IF;
+
+  -- First bet on h1 brings in the house money; the second does not add more.
+  PERFORM public.place_sport_bet(v_h1, 'yes', 100);
+  PERFORM set_config('request.jwt.claim.sub', v_u3::text, true);
+  PERFORM public.place_sport_bet(v_h1, 'yes', 100);
+  IF (SELECT yes_total FROM public.sport_events WHERE id = v_h1) <> 250
+     OR (SELECT no_total FROM public.sport_events WHERE id = v_h1) <> 50
+     OR (SELECT house_yes FROM public.sport_events WHERE id = v_h1) <> 50
+     OR (SELECT house_no FROM public.sport_events WHERE id = v_h1) <> 50
+     OR (SELECT house_seeded_at FROM public.sport_events WHERE id = v_h1) IS NULL THEN
+    RAISE EXCEPTION 'house money was not added once to both sides: %',
+      (SELECT to_jsonb(e) FROM public.sport_events e WHERE id = v_h1);
+  END IF;
+
+  -- h2 is the second match today and gets house money; h3 is over the budget.
+  PERFORM set_config('request.jwt.claim.sub', v_u2::text, true);
+  PERFORM public.place_sport_bet(v_h2, 'yes', 100);
+  PERFORM set_config('request.jwt.claim.sub', v_u3::text, true);
+  PERFORM public.place_sport_bet(v_h3, 'yes', 100);
+  IF (SELECT house_yes FROM public.sport_events WHERE id = v_h2) <> 50
+     OR (SELECT house_yes + house_no FROM public.sport_events WHERE id = v_h3) <> 0
+     OR (SELECT house_seeded_at FROM public.sport_events WHERE id = v_h3) IS NOT NULL THEN
+    RAISE EXCEPTION 'daily house money limit was not applied';
+  END IF;
+  IF (public.get_sport_events('football')->>'house_seed')::integer <> 0 THEN
+    RAISE EXCEPTION 'player list still offers house money after the daily limit';
+  END IF;
+
+  -- h1: Yes wins and only the house was on No. Fee 5 of 50, 45 shared over Yes 250:
+  -- each player gets 100 + 18 = 118, so the house loses 36.
+  SELECT wallet INTO v_u2_wallet FROM public.profiles WHERE id = v_u2;
+  SELECT wallet INTO v_u3_wallet FROM public.profiles WHERE id = v_u3;
+  v_result := public.sport_settle_internal(v_h1, 'yes');
+  IF v_result->>'state' <> 'settled'
+     OR (SELECT wallet FROM public.profiles WHERE id = v_u2) <> v_u2_wallet + 118
+     OR (SELECT wallet FROM public.profiles WHERE id = v_u3) <> v_u3_wallet + 118
+     OR (SELECT house_net FROM public.sport_events WHERE id = v_h1) <> -36 THEN
+    RAISE EXCEPTION 'house money match paid out wrongly: %', v_result;
+  END IF;
+
+  -- h2: No wins, only the house was on No. The player loses 100 and nobody is paid.
+  SELECT wallet INTO v_u2_wallet FROM public.profiles WHERE id = v_u2;
+  v_result := public.sport_settle_internal(v_h2, 'no');
+  IF v_result->>'state' <> 'settled'
+     OR (SELECT wallet FROM public.profiles WHERE id = v_u2) <> v_u2_wallet
+     OR (SELECT house_net FROM public.sport_events WHERE id = v_h2) <> 100
+     OR EXISTS (SELECT 1 FROM public.sport_bets WHERE event_id = v_h2 AND status <> 'lost') THEN
+    RAISE EXCEPTION 'house winning match is wrong: %', v_result;
+  END IF;
+
+  -- h3 had no house money, so it is still refunded as one-sided.
+  v_result := public.sport_settle_internal(v_h3, 'yes');
+  IF v_result->>'reason' <> 'one_sided'
+     OR (SELECT house_net FROM public.sport_events WHERE id = v_h3) <> 0 THEN
+    RAISE EXCEPTION 'match without house money was not refunded: %', v_result;
+  END IF;
+
+  -- Admin summary covers only matches with house money: -36 + 100 = 64.
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  v_result := public.admin_get_sports()->'house';
+  IF (v_result->>'net')::integer <> 64
+     OR (v_result->>'matches_won')::integer <> 1
+     OR (v_result->>'matches_lost')::integer <> 1
+     OR (v_result->>'seeded_today')::integer <> 2 THEN
+    RAISE EXCEPTION 'admin house money summary is wrong: %', v_result;
+  END IF;
+
+  -- The daily report agrees: 31 (ev1) + 10 (ev3) - 36 (h1) + 100 (h2) = 105.
+  v_result := public.admin_daily_report((now() AT TIME ZONE 'Asia/Kolkata')::date);
+  IF NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_result) r
+    WHERE r->>'game' = 'football' AND (r->>'gaming_revenue')::integer = 105
+  ) THEN
+    RAISE EXCEPTION 'daily report does not include the house money result: %', v_result;
+  END IF;
+
+  -- Settings are validated.
+  v_error := NULL;
+  BEGIN
+    PERFORM public.admin_set_sport_settings('{"house_seed": -1}'::jsonb);
+  EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT; END;
+  IF v_error IS NULL OR v_error NOT ILIKE '%House money per side%' THEN
+    RAISE EXCEPTION 'negative house money was accepted: %', v_error;
+  END IF;
+
   -- Clients cannot call the automation or the internal settlement.
   IF has_function_privilege('authenticated', 'public.sports_sync_upsert(jsonb)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.sport_settle_internal(uuid,text,text)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.sport_house_seeded_today()', 'EXECUTE')
      OR has_table_privilege('authenticated', 'public.sport_bets', 'SELECT')
      OR has_table_privilege('authenticated', 'public.sport_events', 'UPDATE') THEN
     RAISE EXCEPTION 'clients can reach sports internals';

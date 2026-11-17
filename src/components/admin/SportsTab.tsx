@@ -42,7 +42,20 @@ interface SportSettings {
   cricket_leagues: string[];
   min_bet: number;
   max_bet: number;
+  house_seed: number;
+  house_seed_daily_matches: number;
   updated_at: string;
+}
+
+/** House money on matches that got it, all time. */
+interface HouseSummary {
+  seeded_today: number;
+  matches_paid: number;
+  matches_won: number;
+  matches_lost: number;
+  matches_waiting: number;
+  net: number;
+  at_risk: number;
 }
 
 interface SyncStatus {
@@ -72,8 +85,17 @@ interface AdminSportEvent {
   fee_taken: number | null;
   yes_total: number;
   no_total: number;
+  house_yes: number;
+  house_no: number;
+  house_seeded: boolean;
+  /** House's real result on a finished match: + won, - lost. */
+  house_net: number | null;
   hidden: boolean;
   bettors: number;
+}
+
+function signed(amount: number) {
+  return `${amount < 0 ? '−' : '+'}₹${Math.abs(amount).toLocaleString('en-IN')}`;
 }
 
 const inputClass = 'w-full min-w-0 px-3 py-2.5 rounded-lg bg-surface-raised border border-surface-strong text-ink-strong text-sm focus:border-emerald-400 focus:ring-0 focus:outline-none';
@@ -101,6 +123,7 @@ export default function SportsTab() {
   const [draft, setDraft] = useState<SportSettings | null>(null);
   const [sync, setSync] = useState<SyncStatus[]>([]);
   const [events, setEvents] = useState<AdminSportEvent[]>([]);
+  const [house, setHouse] = useState<HouseSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -116,11 +139,12 @@ export default function SportsTab() {
     const { data, error } = await supabase.rpc('admin_get_sports');
     setLoading(false);
     if (error) { showError(error); return; }
-    const body = data as { settings: SportSettings; sync: SyncStatus[]; events: AdminSportEvent[] };
+    const body = data as { settings: SportSettings; sync: SyncStatus[]; events: AdminSportEvent[]; house?: HouseSummary };
     setSettings(body.settings);
     setDraft(body.settings);
     setSync(body.sync ?? []);
     setEvents(body.events ?? []);
+    setHouse(body.house ?? null);
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -136,6 +160,8 @@ export default function SportsTab() {
         fee_percent: draft.fee_percent,
         min_bet: draft.min_bet,
         max_bet: draft.max_bet,
+        house_seed: draft.house_seed,
+        house_seed_daily_matches: draft.house_seed_daily_matches,
         football_competitions: draft.football_competitions,
         cricket_leagues: draft.cricket_leagues,
       },
@@ -185,7 +211,7 @@ export default function SportsTab() {
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
   const open = events.filter((e) => e.state === 'open' || e.state === 'closed');
   const done = events.filter((e) => e.state === 'settled' || e.state === 'void');
-  const feeEarned = done.reduce((sum, e) => sum + (e.fee_taken ?? 0), 0);
+  const houseEarned = done.reduce((sum, e) => sum + (e.house_net ?? e.fee_taken ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -259,7 +285,45 @@ export default function SportsTab() {
                 onChange={(e) => setDraft({ ...draft, max_bet: Number(e.target.value.replace(/\D/g, '')) || 0 })} />
             </label>
           </div>
+          <fieldset className="space-y-2">
+            <legend className="mb-1 text-sm font-medium text-ink-soft">House money</legend>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-xs text-ink-soft">₹ on each side
+                <input className={`${inputClass} mt-1`} inputMode="numeric" value={draft.house_seed ?? 0}
+                  onChange={(e) => setDraft({ ...draft, house_seed: Number(e.target.value.replace(/\D/g, '')) || 0 })} />
+              </label>
+              <label className="text-xs text-ink-soft">Matches per day
+                <input className={`${inputClass} mt-1`} inputMode="numeric" value={draft.house_seed_daily_matches ?? 0}
+                  onChange={(e) => setDraft({ ...draft, house_seed_daily_matches: Number(e.target.value.replace(/\D/g, '')) || 0 })} />
+              </label>
+            </div>
+            <p className="text-xs text-ink-muted">
+              When the first player bets on a match, the house adds this amount to Yes and to No, so the bet always has
+              someone on the other side instead of being refunded. The most the house can lose on one match is the amount on
+              one side, so the most it can lose in a day is
+              {' '}<span className="font-semibold text-ink-soft">₹{((draft.house_seed ?? 0) * (draft.house_seed_daily_matches ?? 0)).toLocaleString('en-IN')}</span>.
+              Set either box to 0 to turn it off.
+            </p>
+          </fieldset>
           <Button onClick={() => { void save(); }} loading={saving} disabled={!dirty}>Save sports settings</Button>
+        </Card>
+      )}
+
+      {house && settings && (
+        <Card className="space-y-3">
+          <SectionTitle>House money results</SectionTitle>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <HouseStat label="Overall result" value={signed(house.net)}
+              tone={house.net < 0 ? 'text-rose-300' : 'text-emerald-300'} />
+            <HouseStat label="Matches won / lost" value={`${house.matches_won} / ${house.matches_lost}`} />
+            <HouseStat label="Used today" value={`${house.seeded_today} of ${settings.house_seed_daily_matches}`} />
+            <HouseStat label="Most it can lose now" value={`₹${house.at_risk.toLocaleString('en-IN')}`}
+              hint={`${house.matches_waiting} ${house.matches_waiting === 1 ? 'match' : 'matches'} waiting`} />
+          </div>
+          <p className="text-xs text-ink-muted">
+            All matches that got house money, since it was switched on. The result is what real players lost minus what
+            real winners were paid, so it already includes the fee.
+          </p>
         </Card>
       )}
 
@@ -275,7 +339,7 @@ export default function SportsTab() {
       </section>
 
       <section>
-        <SectionTitle>Finished in the last 7 days · fee earned ₹{feeEarned}</SectionTitle>
+        <SectionTitle>Finished in the last 7 days · house {signed(houseEarned)}</SectionTitle>
         {done.length === 0 ? <p className="text-sm text-ink-muted">Nothing finished yet.</p> : (
           <ul className="space-y-3">
             {done.map((event) => (
@@ -308,6 +372,16 @@ function SyncLine({ label, row }: { label: string; row: SyncStatus | undefined }
   );
 }
 
+function HouseStat({ label, value, tone, hint }: { label: string; value: string; tone?: string; hint?: string }) {
+  return (
+    <div className="rounded-lg bg-surface-raised px-3 py-2">
+      <p className="text-[11px] text-ink-muted">{label}</p>
+      <p className={`text-base font-bold tabular-nums ${tone ?? 'text-ink-strong'}`}>{value}</p>
+      {hint && <p className="text-[11px] text-ink-muted">{hint}</p>}
+    </div>
+  );
+}
+
 function MatchRow({ event, busy, onRefund, onSettle }: {
   event: AdminSportEvent;
   busy: boolean;
@@ -318,7 +392,7 @@ function MatchRow({ event, busy, onRefund, onSettle }: {
   const canSettle = event.state === 'closed' && Date.now() > Date.parse(event.starts_at) + NINETY_MIN;
   const score = event.home_score != null && event.away_score != null ? ` · ${event.home_score}–${event.away_score}` : '';
   let detail = '';
-  if (event.state === 'settled') detail = `Result ${event.outcome === 'yes' ? 'Yes' : 'No'} · fee ₹${event.fee_taken ?? 0}`;
+  if (event.state === 'settled') detail = `Result ${event.outcome === 'yes' ? 'Yes' : 'No'} · house ${signed(event.house_net ?? event.fee_taken ?? 0)}`;
   if (event.state === 'void') detail = `Refunded: ${event.void_reason ?? ''}`;
   if (event.state === 'closed' && event.result_winner) detail = `Result received (${event.result_winner}), paying out after 30 min`;
 
@@ -336,6 +410,9 @@ function MatchRow({ event, busy, onRefund, onSettle }: {
         <p className="text-sm text-ink-soft">
           Yes ₹{event.yes_total} · No ₹{event.no_total} · {event.bettors} {event.bettors === 1 ? 'player' : 'players'} · fee {event.fee_percent}%
         </p>
+        {event.house_seeded && (
+          <p className="text-xs text-ink-muted">Includes house money: ₹{event.house_yes} on Yes, ₹{event.house_no} on No</p>
+        )}
         {detail && <p className="text-xs text-ink-muted">{detail}</p>}
         {active && (
           <div className="flex flex-wrap gap-2">

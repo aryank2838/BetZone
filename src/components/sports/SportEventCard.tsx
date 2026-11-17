@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { CheckCircle2, RotateCcw, XCircle } from 'lucide-react';
+import { CheckCircle2, RotateCcw, ShieldCheck, TrendingUp, XCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { formatCountdown } from '@/lib/countdown';
 import {
-  estimatePayout, isBettable, subjectTeam, yesShare,
+  estimatePayout, isBettable, poolForEstimate, subjectTeam, thinSide, yesShare,
   type SportEvent, type SportSide,
 } from '@/lib/sportsPool';
 import { teamColor, teamInitials } from '@/lib/sportsLook';
@@ -87,11 +87,13 @@ function StatusPill({ event, nowMs, open }: { event: SportEvent; nowMs: number; 
   return <span className={`${base} border-surface-strong text-ink-soft`}>{t('sports.waiting')}</span>;
 }
 
-export default function SportEventCard({ event, nowMs, minBet, maxBet, onPlaced, onAddFunds }: {
+export default function SportEventCard({ event, nowMs, minBet, maxBet, houseSeed, onPlaced, onAddFunds }: {
   event: SportEvent;
   nowMs: number;
   minBet: number;
   maxBet: number;
+  /** House money an untouched match gets on each side with its first bet. */
+  houseSeed: number;
   onPlaced: () => Promise<void>;
   onAddFunds: () => void;
 }) {
@@ -100,6 +102,15 @@ export default function SportEventCard({ event, nowMs, minBet, maxBet, onPlaced,
   const [side, setSide] = useState<SportSide | null>(null);
   const team = subjectTeam(event);
   const open = isBettable(event, nowMs);
+  const pool = poolForEstimate(event, houseSeed);
+  const thinCandidate = open ? thinSide(pool.yesTotal, pool.noTotal) : null;
+  const thinAmount = thinCandidate === 'yes' ? pool.yesTotal : pool.noTotal;
+  // An empty side already says "Be the first to bet" on its button.
+  const thin = thinAmount > 0 ? thinCandidate : null;
+  const thinPayout = thin
+    ? estimatePayout({ stake: 100, side: thin, ...pool, feePercent: event.fee_percent }).payout
+    : 0;
+  const houseEach = event.house_seeded ? event.house_yes : open ? houseSeed : 0;
   const share = yesShare(event.yes_total, event.no_total);
   const startsMs = Date.parse(event.starts_at);
   const total = event.yes_total + event.no_total;
@@ -171,7 +182,7 @@ export default function SportEventCard({ event, nowMs, minBet, maxBet, onPlaced,
           <div className="grid grid-cols-2 gap-2">
             {(['yes', 'no'] as SportSide[]).map((s) => {
               const look = SIDE[s];
-              const est = estimatePayout({ stake: 100, side: s, yesTotal: event.yes_total, noTotal: event.no_total, feePercent: event.fee_percent });
+              const est = estimatePayout({ stake: 100, side: s, ...pool, feePercent: event.fee_percent });
               const pct = s === 'yes' ? share : 100 - share;
               const selected = side === s;
               return (
@@ -197,6 +208,21 @@ export default function SportEventCard({ event, nowMs, minBet, maxBet, onPlaced,
           </div>
         ) : null}
 
+        {thin && side !== thin && (
+          <button
+            type="button"
+            onClick={() => setSide(thin)}
+            className={`flex w-full items-center gap-2 rounded-control border px-3 py-2 text-left text-xs font-semibold ${SIDE[thin].border} ${SIDE[thin].bg} ${SIDE[thin].strong} hover:brightness-125`}
+          >
+            <TrendingUp className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {interpolate(t('sports.thinNudge'), {
+              side: sideLabel(thin),
+              amount: formatNumber(thinAmount),
+              payout: formatNumber(thinPayout),
+            })}
+          </button>
+        )}
+
         <div>
           <div className="flex h-2 overflow-hidden rounded-full bg-surface-raised" aria-hidden="true">
             {total > 0 && <div className={SIDE.yes.bar} style={{ width: `${share}%` }} />}
@@ -214,6 +240,12 @@ export default function SportEventCard({ event, nowMs, minBet, maxBet, onPlaced,
             </div>
           ) : (
             <p className="mt-1.5 text-center text-[11px] text-ink-muted">{interpolate(t('sports.totalPool'), { amount: '0' })}</p>
+          )}
+          {houseEach > 0 && event.state !== 'void' && (
+            <p className="mt-1.5 flex items-center justify-center gap-1 text-center text-[11px] text-ink-muted">
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {interpolate(t(event.house_seeded ? 'sports.houseIn' : 'sports.houseNext'), { amount: formatNumber(houseEach) })}
+            </p>
           )}
         </div>
 
@@ -243,6 +275,7 @@ export default function SportEventCard({ event, nowMs, minBet, maxBet, onPlaced,
         {open && side && (
           <BetForm
             event={event}
+            pool={pool}
             side={side}
             minBet={minBet}
             maxBet={maxBet}
@@ -256,8 +289,9 @@ export default function SportEventCard({ event, nowMs, minBet, maxBet, onPlaced,
   );
 }
 
-function BetForm({ event, side, minBet, maxBet, onCancel, onPlaced, onAddFunds }: {
+function BetForm({ event, pool, side, minBet, maxBet, onCancel, onPlaced, onAddFunds }: {
   event: SportEvent;
+  pool: { yesTotal: number; noTotal: number };
   side: SportSide;
   minBet: number;
   maxBet: number;
@@ -276,7 +310,7 @@ function BetForm({ event, side, minBet, maxBet, onCancel, onPlaced, onAddFunds }
   const look = SIDE[side];
   const sideLabel = t(side === 'yes' ? 'sports.yes' : 'sports.no');
   const question = interpolate(t('sports.question'), { team: subjectTeam(event) });
-  const est = estimatePayout({ stake: value, side, yesTotal: event.yes_total, noTotal: event.no_total, feePercent: event.fee_percent });
+  const est = estimatePayout({ stake: value, side, ...pool, feePercent: event.fee_percent });
   const quick = QUICK_AMOUNTS.filter((q) => q >= minBet && q <= maxBet);
 
   const submit = async () => {

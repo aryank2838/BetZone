@@ -1,5 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { estimatePayout, isBettable, subjectTeam, yesShare } from './sportsPool';
+import { estimatePayout, isBettable, poolForEstimate, subjectTeam, thinSide, yesShare } from './sportsPool';
+
+describe('house money', () => {
+  it('counts the coming house money on a match that has not had it yet', () => {
+    expect(poolForEstimate({ yes_total: 0, no_total: 0, house_seeded: false }, 50))
+      .toEqual({ yesTotal: 50, noTotal: 50 });
+    // Already in the totals: not added twice.
+    expect(poolForEstimate({ yes_total: 550, no_total: 50, house_seeded: true }, 50))
+      .toEqual({ yesTotal: 550, noTotal: 50 });
+    // Budget used up today.
+    expect(poolForEstimate({ yes_total: 200, no_total: 0, house_seeded: false }, 0))
+      .toEqual({ yesTotal: 200, noTotal: 0 });
+  });
+
+  it('a first bet with house money pays instead of refunding', () => {
+    // Pool after the seed: Yes 50, No 50. 100 on Yes: 100 + floor(45 * 100 / 150) = 130.
+    const pool = poolForEstimate({ yes_total: 0, no_total: 0, house_seeded: false }, 50);
+    expect(estimatePayout({ stake: 100, side: 'yes', ...pool, feePercent: 10 }))
+      .toEqual({ payout: 130, refund: false });
+  });
+
+  it('thinSide finds a side with under a quarter of the pool', () => {
+    expect(thinSide(0, 0)).toBeNull();
+    expect(thinSide(500, 500)).toBeNull();
+    expect(thinSide(550, 50)).toBe('no');
+    expect(thinSide(20, 1000)).toBe('yes');
+    expect(thinSide(75, 225)).toBeNull(); // exactly a quarter is not thin
+  });
+});
 
 describe('estimatePayout', () => {
   it('matches the 70/30 example with a 10% fee', () => {

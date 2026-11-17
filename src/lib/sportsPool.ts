@@ -17,8 +17,13 @@ export interface SportEvent {
   outcome: SportSide | null;
   void_reason: string | null;
   fee_percent: number;
+  /** Pool totals, house money included. */
   yes_total: number;
   no_total: number;
+  /** House money on each side (part of the totals above). */
+  house_yes: number;
+  house_no: number;
+  house_seeded: boolean;
   my_yes: number;
   my_no: number;
 }
@@ -28,6 +33,8 @@ export interface SportEventsResponse {
   cricket_enabled: boolean;
   min_bet: number;
   max_bet: number;
+  /** House money a match with no bets yet gets on each side with its first bet (0 = none today). */
+  house_seed: number;
   events: SportEvent[];
 }
 
@@ -72,6 +79,30 @@ export function estimatePayout({ stake, side, yesTotal, noTotal, feePercent }: {
   if (losePool <= 0) return { payout: stake, refund: true };
   const distributable = losePool - Math.floor((losePool * feePercent) / 100);
   return { payout: stake + Math.floor((distributable * stake) / winPool), refund: false };
+}
+
+/**
+ * Pool totals to estimate with. A match that has not had house money yet gets
+ * `nextSeed` on each side with its first bet, so count it in advance.
+ */
+export function poolForEstimate(
+  event: Pick<SportEvent, 'yes_total' | 'no_total' | 'house_seeded'>,
+  nextSeed: number,
+): { yesTotal: number; noTotal: number } {
+  const seed = !event.house_seeded && nextSeed > 0 ? nextSeed : 0;
+  return { yesTotal: event.yes_total + seed, noTotal: event.no_total + seed };
+}
+
+/**
+ * The side with much less money (under a quarter of the pool), to nudge
+ * players towards it. Null when the pool is empty or roughly balanced.
+ */
+export function thinSide(yesTotal: number, noTotal: number): SportSide | null {
+  const total = yesTotal + noTotal;
+  if (total <= 0) return null;
+  if (yesTotal * 4 < total) return 'yes';
+  if (noTotal * 4 < total) return 'no';
+  return null;
 }
 
 /** Kick-off is in the future and the match is still open. */

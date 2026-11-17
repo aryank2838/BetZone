@@ -513,7 +513,7 @@ const en = {
   'sports.placed': "Bet placed: ₹{amount} on {side}",
   'sports.cancel': "Cancel",
   'sports.howItWorks': "How it works",
-  'sports.rules': "All Yes bets go into one pool and all No bets into another. After the match, {fee}% of the losing pool is kept as a fee, and the rest is shared among the winners by how much they bet, plus their own money back. Betting closes when the match starts. If nobody bets on one side, or the match is postponed or cancelled, everyone gets their money back. Football results include extra time and penalties, and a draw counts as No. In cricket, a tie or draw counts as No, the Super Over winner counts as the winner, and a match with no result is refunded.",
+  'sports.rules': "All Yes bets go into one pool and all No bets into another. After the match, {fee}% of the losing pool is kept as a fee, and the rest is shared among the winners by how much they bet, plus their own money back. Betting closes when the match starts. So that every bet has someone on the other side, we may add a small amount of our own money to both sides. It counts like any other bet, but only players are paid out. If one side still has no bets, or the match is postponed or cancelled, everyone gets their money back. Football results include extra time and penalties, and a draw counts as No. In cricket, a tie or draw counts as No, the Super Over winner counts as the winner, and a match with no result is refunded.",
   'sports.myBets': "My sports bets",
   'sports.betStatus.open': "Waiting",
   'sports.betStatus.won': "Won ₹{amount}",
@@ -530,6 +530,9 @@ const en = {
   'sports.yourBet': "Your bet: {side} ₹{amount}",
   'sports.youWon': "Won",
   'sports.youLost': "Lost",
+  'sports.thinNudge': "Only ₹{amount} on {side}. ₹100 on {side} could pay about ₹{payout}.",
+  'sports.houseIn': "We added ₹{amount} to each side so every bet has someone on the other side.",
+  'sports.houseNext': "We add ₹{amount} to each side with the first bet, so every bet has someone on the other side.",
 } as const;
 
 export default en;

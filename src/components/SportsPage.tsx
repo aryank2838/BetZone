@@ -120,6 +120,7 @@ export default function SportsPage({ onAddFunds }: { onAddFunds: () => void }) {
                       nowMs={nowMs}
                       minBet={data.min_bet}
                       maxBet={data.max_bet}
+                      houseSeed={data.house_seed ?? 0}
                       onPlaced={afterBet}
                       onAddFunds={onAddFunds}
                     />
