@@ -1,4 +1,4 @@
-# Security headers for Netlify and Cloudflare Pages (Vercel uses vercel.json).
+# Security headers for Netlify and Cloudflare Pages.
 # The main Content-Security-Policy is a <meta> tag generated at build time;
 # frame-ancestors only works as an HTTP header, so it is set here.
 /*
