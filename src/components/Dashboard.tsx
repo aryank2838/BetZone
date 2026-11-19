@@ -22,7 +22,7 @@ import type { MoneyTab } from '@/components/BalancePage';
 import BottomNav, { type TabView } from '@/components/BottomNav';
 import Alert from '@/components/ui/Alert';
 import { SectionTitle } from '@/components/ui/Card';
-import ReferralCard from '@/components/ReferralCard';
+import ReferralCard, { REFERRAL_CARD_ID, ReferralTeaser, useMyReferral } from '@/components/ReferralCard';
 import { WITH_BOTTOM_NAV } from '@/components/ui/layout';
 import { useMyLimits, activePlayRestriction, formatLimitEnd } from '@/lib/useMyLimits';
 import { CardSkeleton } from '@/components/Skeleton';
@@ -201,6 +201,13 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
   const { limits } = useMyLimits();
   const restriction = activePlayRestriction(limits);
   const [gameFilter, setGameFilter] = useState<'all' | 'open'>('all');
+  const referral = useMyReferral(Boolean(profile && !profile.is_admin));
+  const openReferral = () => {
+    const card = document.getElementById(REFERRAL_CARD_ID);
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    card.focus({ preventScroll: true });
+  };
 
   useEffect(() => {
     let active = true;
@@ -318,6 +325,8 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
           </dl>
         </section>
 
+        {referral && <ReferralTeaser data={referral} onOpen={openReferral} />}
+
         <PlayLimitsSummary limits={limits} onOpen={() => onNavigate('limits')} />
 
         <section aria-labelledby="games-title" className="animate-slide-up">
@@ -371,7 +380,7 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
           </div>
         </section>
 
-        {profile && !profile.is_admin && <ReferralCard />}
+        {referral && <ReferralCard data={referral} />}
 
         <InstallBanner />
 

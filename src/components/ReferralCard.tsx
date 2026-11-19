@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronUp, Copy, Gift, Share2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Copy, Gift, Share2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { referralLink, whatsappShareUrl } from '@/lib/referral';
 import { useToast } from '@/components/ui/toastContext';
@@ -29,28 +29,63 @@ const FRIEND_STATUS: Record<Exclude<ReferralFriend['status'], 'paid' | null>, Tr
   not_eligible: 'referral.statusNotEligible',
 };
 
-/** Home screen: the player's invite link, how to share it, and what it earned. */
-export default function ReferralCard() {
-  const { t } = useT();
-  const { formatNumber, formatDate } = useFormat();
-  const toast = useToast();
+/** Loads the player's invite code and earnings once; null until loaded or if it fails. */
+export function useMyReferral(enabled = true): MyReferral | null {
   const [data, setData] = useState<MyReferral | null>(null);
-  const [showFriends, setShowFriends] = useState(false);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     let active = true;
     void (async () => {
       try {
         const { data: result, error } = await supabase.rpc('get_my_referral');
         if (active && !error && result) setData(result as MyReferral);
       } catch {
-        // The card is extra: without it the home screen still works.
+        // The referral UI is extra: without it the home screen still works.
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [enabled]);
 
-  if (!data) return null;
+  return enabled ? data : null;
+}
+
+/** One-line invite strip near the top of Home; tapping it jumps to the full card. */
+export function ReferralTeaser({ data, onOpen }: { data: MyReferral; onOpen: () => void }) {
+  const { t } = useT();
+  const { formatNumber } = useFormat();
+  const rupees = (value: number) => `₹${formatNumber(value)}`;
+  const sub = data.total_earned > 0
+    ? interpolate(t('referral.teaserEarned'), { amount: rupees(data.total_earned) })
+    : interpolate(t('referral.teaser'), { percent: data.rules.percent, max: rupees(data.rules.max_reward) });
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-3 rounded-card border border-emerald-500/30 bg-gradient-to-r from-emerald-950/60 to-cyan-950/40 px-4 py-3 text-left hover:border-emerald-400/60 animate-slide-up"
+    >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-emerald-300" aria-hidden="true">
+        <Gift className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-ink-strong">{t('referral.title')}</span>
+        <span className="block truncate text-xs text-ink-soft">{sub}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+    </button>
+  );
+}
+
+export const REFERRAL_CARD_ID = 'referral-card';
+
+/** Home screen: the player's invite link, how to share it, and what it earned. */
+export default function ReferralCard({ data }: { data: MyReferral }) {
+  const { t } = useT();
+  const { formatNumber, formatDate } = useFormat();
+  const toast = useToast();
+  const [showFriends, setShowFriends] = useState(false);
+
 
   const link = referralLink(data.code);
   const rupees = (value: number) => `₹${formatNumber(value)}`;
@@ -72,7 +107,7 @@ export default function ReferralCard() {
   };
 
   return (
-    <section aria-labelledby="referral-title" className="space-y-4 rounded-card border border-emerald-500/30 bg-gradient-to-br from-emerald-950/60 to-cyan-950/40 p-4">
+    <section id={REFERRAL_CARD_ID} tabIndex={-1} aria-labelledby="referral-title" className="scroll-mt-20 space-y-4 outline-none rounded-card border border-emerald-500/30 bg-gradient-to-br from-emerald-950/60 to-cyan-950/40 p-4">
       <div className="flex items-start gap-3">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-emerald-300" aria-hidden="true">
           <Gift className="h-5 w-5" />

@@ -103,7 +103,7 @@ describe('selection bet slip', () => {
     );
 
     await screen.findByRole('button', { name: '00' });
-    fireEvent.change(screen.getByLabelText('Bet per number'), { target: { value: '50' } });
+    fireEvent.change(screen.getByLabelText(/type your own amount/i), { target: { value: '50' } });
     fireEvent.click(screen.getByRole('button', { name: '00' }));
     fireEvent.click(screen.getByRole('button', { name: '01' }));
     // The sticky slip bar shows the running count and total.
@@ -116,6 +116,11 @@ describe('selection bet slip', () => {
     expect(within(dialog).getByText('Betting balance').nextSibling).toHaveTextContent('0');
     expect(within(dialog).getByText('Withdrawable').nextSibling).toHaveTextContent('60');
     expect(within(dialog).getAllByText('Win ₹4,500')).toHaveLength(2);
+
+    // Amounts can still be changed on the review sheet itself.
+    fireEvent.change(within(dialog).getByLabelText('Bet on 00'), { target: { value: '20' } });
+    expect(within(dialog).getByText('Total to pay').nextSibling).toHaveTextContent('70');
+    expect(within(dialog).getByText('Win ₹1,800')).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Place bets' }));
     await waitFor(() => {

@@ -22,7 +22,7 @@ import { useFormat } from '@/i18n/useFormat';
 import { interpolate, useT } from '@/i18n/useT';
 import type { TranslationKey } from '@/i18n/context';
 import { calculateBetSlip } from '@/lib/betSlip';
-import { CalendarOff, Clock, Lock, Plus, ReceiptText, Trophy, X } from 'lucide-react';
+import { CalendarOff, Clock, Lock, Pencil, Plus, ReceiptText, Trophy, X } from 'lucide-react';
 import { formatHolidayDate, isDayOff, isOnHoliday } from '@/lib/holiday';
 
 interface SelectionScreenProps {
@@ -113,6 +113,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
     && (closeBet ? status.close_bets_open : status.open_bets_open)
     && cutoffTone !== 'closed';
   const stakeError = interpolate(t('bet.stakeRange'), { max: rupees(betLimits.maxPerBet) });
+  const customStake = manualPoints !== '' && !betLimits.quickStakes.some((value) => String(value) === manualPoints);
 
   useEffect(() => {
     let active = true;
@@ -255,6 +256,12 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
   const invalidEntry = pendingSorted.some((p) => !validStake(p.points));
   const exceedsSubmitLimit = newTotal > betLimits.maxPerSubmit;
   const slipVisible = betOpen && pendingSorted.length > 0;
+  const jumpToSlip = () => {
+    const slip = document.getElementById('selection-slip');
+    if (!slip) return;
+    slip.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    slip.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true });
+  };
   const otherSlips = (Object.entries(slips) as Array<[Tab, PendingPick[]]>).filter(([type, picks]) => type !== tab && picks.length > 0);
   const slipCount = Object.values(slips).reduce((sum, picks) => sum + (picks?.length ?? 0), 0);
 
@@ -472,22 +479,9 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
         {betOpen && (
           <Card className="space-y-4 !p-4">
             <div>
-              <label htmlFor="selection-stake" className="mb-2 block text-sm font-medium text-ink-soft">{t('bet.stakeLabel')}</label>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden="true">₹</span>
-                  <input
-                    id="selection-stake"
-                    type="number"
-                    min={1}
-                    max={betLimits.maxPerBet}
-                    step={1}
-                    inputMode="numeric"
-                    value={manualPoints}
-                    onChange={(event) => setManualPoints(event.target.value)}
-                    className={`${INPUT} w-28 pl-7`}
-                  />
-                </div>
+              <p id="selection-stake-title" className="text-sm font-medium text-ink-soft">{t('bet.stakeLabel')}</p>
+              <p className="mb-2 mt-0.5 text-xs text-ink-muted">{t('bet.stakeHint')}</p>
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-labelledby="selection-stake-title">
                 {betLimits.quickStakes.map((value) => (
                   <button
                     key={value}
@@ -504,6 +498,25 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
                   </button>
                 ))}
               </div>
+              <label htmlFor="selection-stake" className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="text-sm font-medium text-ink-soft">{t('bet.customAmount')}</span>
+                <span className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden="true">₹</span>
+                  <input
+                    id="selection-stake"
+                    type="number"
+                    min={1}
+                    max={betLimits.maxPerBet}
+                    step={1}
+                    inputMode="numeric"
+                    value={manualPoints}
+                    onChange={(event) => setManualPoints(event.target.value)}
+                    onFocus={(event) => event.target.select()}
+                    className={`${INPUT} w-36 pl-7 pr-9 ${customStake ? '!border-brand-500 ring-1 ring-brand-500/40' : 'border-dashed'}`}
+                  />
+                  <Pencil className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
+                </span>
+              </label>
               {pendingSorted.length > 0 && (
                 <button
                   type="button"
@@ -559,7 +572,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
             )}
 
             {pendingSorted.length > 0 && (
-              <div className="space-y-2 border-t border-surface-border pt-4">
+              <div id="selection-slip" className="scroll-mt-24 space-y-2 border-t border-surface-border pt-4">
                 <SectionTitle action={<button type="button" onClick={() => { setPending([]); setMessage(null); }} className="min-h-[36px] text-sm text-ink-muted hover:text-ink-soft">{t('bet.clearAll')}</button>}>
                   {t('bet.inSlip')}
                 </SectionTitle>
@@ -641,7 +654,16 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
                 <p className="text-sm font-semibold text-ink-strong">
                   {interpolate(t(pendingSorted.length === 1 ? 'bet.slipOne' : 'bet.slipMany'), { count: pendingSorted.length })} · {rupees(newTotal)}
                 </p>
-                <p className="truncate text-xs text-ink-muted">{t(`bet.name.${tab}` as TranslationKey)}</p>
+                <p className="flex items-center gap-2 text-xs text-ink-muted">
+                  <span className="truncate">{t(`bet.name.${tab}` as TranslationKey)}</span>
+                  <button
+                    type="button"
+                    onClick={jumpToSlip}
+                    className="inline-flex min-h-[32px] shrink-0 items-center gap-1 font-semibold text-accent-300 hover:text-accent-200"
+                  >
+                    <Pencil className="h-3 w-3" aria-hidden="true" /> {t('bet.editAmounts')}
+                  </button>
+                </p>
                 {otherSlips.length > 0 && (
                   <p className="truncate text-xs text-amber-300">
                     {interpolate(t('bet.otherSlips'), { list: otherSlips.map(([type, picks]) => `${t(`bet.name.${type}` as TranslationKey)} (${picks.length})`).join(', ') })}
@@ -672,12 +694,30 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
           >
             <h2 id="bet-slip-title" className="text-lg font-bold text-ink-strong">{t('betslip.title')}</h2>
             <p className="mt-1 text-sm text-amber-300">{t('betslip.locked')}</p>
+            <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-soft">
+              <Pencil className="h-3.5 w-3.5 shrink-0 text-accent-300" aria-hidden="true" /> {t('betslip.editHint')}
+            </p>
             <ul className="mt-4 max-h-56 divide-y divide-surface-border overflow-y-auto rounded-control border border-surface-border">
               {pendingSorted.map((pick, index) => (
                 <li key={pick.number} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
                   <span className="font-bold text-ink-strong">{pick.number}</span>
-                  <span className="text-ink-muted">{interpolate(t('betslip.stake'), { points: formatNumber(pick.points) })}</span>
-                  <span className="text-brand-300">{interpolate(t('betslip.potentialWin'), { amount: formatNumber(betSlip.potentialWins[index]) })}</span>
+                  <span className="relative">
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden="true">₹</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={betLimits.maxPerBet}
+                      step={1}
+                      inputMode="numeric"
+                      aria-label={interpolate(t('bet.stakeFor'), { number: pick.number })}
+                      value={pick.points || ''}
+                      disabled={saving}
+                      onChange={(event) => updatePendingPoints(pick.number, event.target.value === '' ? 0 : Number(event.target.value))}
+                      onFocus={(event) => event.target.select()}
+                      className={`${INPUT} w-24 py-1.5 pl-6 text-sm`}
+                    />
+                  </span>
+                  <span className="text-right text-brand-300">{interpolate(t('betslip.potentialWin'), { amount: formatNumber(betSlip.potentialWins[index]) })}</span>
                 </li>
               ))}
             </ul>
