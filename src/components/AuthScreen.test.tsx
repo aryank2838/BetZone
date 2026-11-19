@@ -124,3 +124,47 @@ it('confirms the email from a token_hash link', async () => {
   expect(authMock.verifyOtp).toHaveBeenCalledWith({ token_hash: 'abc123', type: 'signup' });
   expect(window.location.search).toBe('');
 });
+
+describe('AuthScreen email checks', () => {
+  const fillSignup = (email: string) => {
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByLabelText(/I am 18 or older/));
+  };
+
+  it('asks for a real email on sign-up only', () => {
+    render(<AuthScreen />);
+    expect(screen.getByText(/use your real email/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+    expect(screen.queryByText(/use your real email/i)).toBeNull();
+  });
+
+  it('suggests a fix for a typo and fills it in with one tap', () => {
+    render(<AuthScreen />);
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ravi@gmial.com' } });
+    expect(screen.queryByText(/did you mean/i)).toBeNull();
+    fireEvent.blur(screen.getByLabelText('Email'));
+    fireEvent.click(screen.getByRole('button', { name: 'ravi@gmail.com' }));
+    expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('ravi@gmail.com');
+    expect(screen.queryByText(/did you mean/i)).toBeNull();
+  });
+
+  it('shows the typo once before creating the account, then lets the player go ahead', async () => {
+    authMock.signUp.mockResolvedValue({ data: { session: {} }, error: null });
+    render(<AuthScreen />);
+    fillSignup('ravi@gmail.co');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    });
+    expect(authMock.signUp).not.toHaveBeenCalled();
+    expect(screen.getByText(/did you mean/i)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    });
+    expect(authMock.signUp).toHaveBeenCalledTimes(1);
+    expect(authMock.signUp.mock.calls[0][0].email).toBe('ravi@gmail.co');
+  });
+});

@@ -482,6 +482,8 @@ const en = {
   'auth.showPassword': "Show password",
   'auth.hidePassword': "Hide password",
   'auth.resend': "Resend email",
+  'auth.emailHint': "Use your real email. You'll need it once to withdraw your winnings.",
+  'auth.didYouMean': "Did you mean {email}?",
   'auth.resendIn': "Resend email ({seconds}s)",
   'auth.resendWait': "Please wait {seconds} seconds before asking for another email.",
   'auth.starterBonus': "Get 5% extra on your first deposit of ₹50 or more (at least 10 points).",

@@ -488,6 +488,8 @@ const hi: Record<keyof typeof en, string> = {
   'auth.showPassword': 'पासवर्ड दिखाएँ',
   'auth.hidePassword': 'पासवर्ड छिपाएँ',
   'auth.resend': 'ईमेल दोबारा भेजें',
+  'auth.emailHint': "अपना असली ईमेल डालें। जीती हुई रकम निकालने के लिए इसकी एक बार ज़रूरत पड़ेगी।",
+  'auth.didYouMean': "क्या आपका मतलब {email} था?",
   'auth.resendIn': 'ईमेल दोबारा भेजें ({seconds} सेकंड)',
   'auth.resendWait': 'दूसरा ईमेल मँगाने से पहले {seconds} सेकंड रुकें।',
   'auth.starterBonus': 'पहली बार ₹50 या उससे ज़्यादा जोड़ने पर 5% एक्स्ट्रा पाएँ (कम से कम 10 पॉइंट)।',

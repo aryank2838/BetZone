@@ -11,6 +11,7 @@ import { interpolate, useT } from '@/i18n/useT';
 
 type Mode = 'signup' | 'login';
 import { TERMS_VERSION } from '@/lib/terms';
+import { suggestEmail } from '@/lib/emailTypo';
 
 export default function AuthScreen() {
   const { t } = useT();
@@ -33,6 +34,10 @@ export default function AuthScreen() {
   const requestInFlight = useRef(false);
 
   const isSignup = mode === 'signup';
+  // "Did you mean …@gmail.com?" once the player leaves the email box (or submits).
+  const [emailChecked, setEmailChecked] = useState(false);
+  const emailSuggestion = emailChecked ? suggestEmail(email) : null;
+  const [didYouMeanBefore, didYouMeanAfter = ''] = t('auth.didYouMean').split('{email}');
 
   // Back from an email link: say what happened instead of failing silently.
   useEffect(() => {
@@ -97,6 +102,11 @@ export default function AuthScreen() {
     }
     if (isSignup && password.length < 8) {
       setError(t('auth.errorPassword'));
+      return;
+    }
+    // Show a likely typo once before creating the account; a second tap goes ahead.
+    if (isSignup && !emailChecked && suggestEmail(email)) {
+      setEmailChecked(true);
       return;
     }
     if (isSignup && Date.now() < nextConfirmationEmailAt.current) {
@@ -361,11 +371,29 @@ export default function AuthScreen() {
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setConfirmationEmail(''); }}
+              onBlur={() => setEmailChecked(true)}
               readOnly={confirmationPending}
               placeholder="you@example.com"
               autoComplete="email"
+              aria-describedby={isSignup ? 'email-hint' : undefined}
               className="w-full px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700 text-white placeholder-slate-500 focus:border-emerald-400 focus:ring-0 focus:outline-none transition-colors"
             />
+            {isSignup && (
+              <p id="email-hint" className="mt-1.5 text-xs text-slate-400">{t('auth.emailHint')}</p>
+            )}
+            {isSignup && emailSuggestion && (
+              <p role="status" className="mt-1.5 text-xs text-amber-300">
+                {didYouMeanBefore}
+                <button
+                  type="button"
+                  onClick={() => { setEmail(emailSuggestion); setEmailChecked(false); }}
+                  className="font-semibold text-cyan-300 underline break-all"
+                >
+                  {emailSuggestion}
+                </button>
+                {didYouMeanAfter}
+              </p>
+            )}
           </div>
           {!isSignup && (
             <button type="button" disabled={busy} onClick={() => { void handleForgotPassword(); }} className="text-xs text-cyan-300 underline disabled:opacity-50">
