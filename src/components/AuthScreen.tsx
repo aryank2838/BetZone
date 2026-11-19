@@ -12,6 +12,7 @@ import { interpolate, useT } from '@/i18n/useT';
 type Mode = 'signup' | 'login';
 import { TERMS_VERSION } from '@/lib/terms';
 import { suggestEmail } from '@/lib/emailTypo';
+import { clearStoredReferralCode, normalizeReferralCode, storedReferralCode } from '@/lib/referral';
 
 export default function AuthScreen() {
   const { t } = useT();
@@ -29,6 +30,9 @@ export default function AuthScreen() {
   // Show "Resend email" (on either tab) for confirmationEmail or the typed email.
   const [canResend, setCanResend] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  // Filled in from an invite link (?ref=CODE); optional otherwise.
+  const [inviteCode, setInviteCode] = useState(() => storedReferralCode() ?? '');
+  const [showInvite, setShowInvite] = useState(() => storedReferralCode() !== null);
   const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(null);
   const nextConfirmationEmailAt = useRef(0);
   const requestInFlight = useRef(false);
@@ -100,6 +104,10 @@ export default function AuthScreen() {
       setError(t('auth.errorTerms'));
       return;
     }
+    if (isSignup && inviteCode.trim() && !normalizeReferralCode(inviteCode)) {
+      setError(t('auth.inviteInvalid'));
+      return;
+    }
     if (isSignup && password.length < 8) {
       setError(t('auth.errorPassword'));
       return;
@@ -123,10 +131,16 @@ export default function AuthScreen() {
           password,
           options: {
             emailRedirectTo: authRedirectUrl(),
-            data: { display_name: name.trim(), accepted_terms: true, terms_version: TERMS_VERSION },
+            data: {
+              display_name: name.trim(),
+              accepted_terms: true,
+              terms_version: TERMS_VERSION,
+              ...(normalizeReferralCode(inviteCode) ? { referral_code: normalizeReferralCode(inviteCode) } : {}),
+            },
           },
         });
         if (signUpError) throw signUpError;
+        clearStoredReferralCode();
         if (!data.session) {
           setConfirmationPending(true);
           setConfirmationEmail(email.trim());
@@ -414,6 +428,30 @@ export default function AuthScreen() {
               className="w-full px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700 text-white placeholder-slate-500 focus:border-emerald-400 focus:ring-0 focus:outline-none transition-colors"
             />
           </div>
+
+          {isSignup && (showInvite ? (
+            <div className="animate-fade-in">
+              <label htmlFor="invite-code" className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wide">
+                {t('auth.inviteCode')}
+              </label>
+              <input
+                id="invite-code"
+                type="text"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+                placeholder="ABC234"
+                autoCapitalize="characters"
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700 text-white tracking-[0.3em] placeholder-slate-500 focus:border-emerald-400 focus:ring-0 focus:outline-none transition-colors"
+              />
+              <p className="mt-1.5 text-xs text-slate-400">{t('auth.inviteHint')}</p>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setShowInvite(true)} className="text-xs text-cyan-300 underline">
+              {t('auth.haveInvite')}
+            </button>
+          ))}
 
           {error && (
             <div role="alert" className="text-sm text-rose-400 bg-rose-950/40 border border-rose-900 rounded-lg px-3 py-2">

@@ -22,6 +22,31 @@ describe('push messages', () => {
     expect(buildMessage('winnings', 900, null, 'en').url).toBe('/?open=bets');
   });
 
+  it('reminds about a match, opens Sports, and keeps one notification per match', () => {
+    const first = buildMessage('match_starting', 1200, 'Arsenal vs Chelsea', 'en');
+    expect(first).toEqual({
+      title: 'Your match starts soon',
+      body: 'Arsenal vs Chelsea starts soon. You have ₹1,200 on it.',
+      url: '/?open=sports',
+      tag: 'match_starting:Arsenal vs Chelsea',
+    });
+    expect(buildMessage('match_starting', 200, 'India vs Australia', 'hi').body)
+      .toBe('India vs Australia जल्द शुरू होगा। इस पर आपके ₹200 लगे हैं।');
+    expect(buildMessage('match_starting', 200, 'India vs Australia', 'mr').tag)
+      .not.toBe(first.tag);
+  });
+
+  it('tells the inviter about a referral bonus and opens Money', () => {
+    expect(buildMessage('referral_bonus', 150, 'Ravi', 'en')).toEqual({
+      title: 'Referral bonus 🎉',
+      body: 'Ravi added money. ₹150 bonus is in your play balance.',
+      url: '/?open=money',
+      tag: 'referral_bonus',
+    });
+    expect(buildMessage('referral_bonus', 150, null, 'mr').body)
+      .toBe('तुम्ही बोलावलेल्या मित्राने पैसे जोडले. ₹150 बोनस तुमच्या प्ले बॅलन्समध्ये जोडला आहे.');
+  });
+
   it('falls back to English for unknown languages', () => {
     expect(normalizeLanguage('fr')).toBe('en');
     expect(normalizeLanguage(null)).toBe('en');

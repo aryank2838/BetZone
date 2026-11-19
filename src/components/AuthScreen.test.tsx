@@ -168,3 +168,50 @@ describe('AuthScreen email checks', () => {
     expect(authMock.signUp.mock.calls[0][0].email).toBe('ravi@gmail.co');
   });
 });
+
+describe('AuthScreen invite code', () => {
+  afterEach(() => { try { localStorage.clear(); } catch { /* ignore */ } });
+
+  const fill = () => {
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'test@example.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByLabelText(/I am 18 or older/));
+  };
+
+  it('fills in the code from an invite link and sends it with the sign-up', async () => {
+    localStorage.setItem('betzone_ref', 'ABC234');
+    authMock.signUp.mockResolvedValue({ data: { session: {} }, error: null });
+    render(<AuthScreen />);
+    expect((screen.getByLabelText(/invite code/i) as HTMLInputElement).value).toBe('ABC234');
+    fill();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    });
+    expect(authMock.signUp.mock.calls[0][0].options.data.referral_code).toBe('ABC234');
+    expect(localStorage.getItem('betzone_ref')).toBeNull();
+  });
+
+  it('hides the field behind a link when there is no invite, and sends no code', async () => {
+    authMock.signUp.mockResolvedValue({ data: { session: {} }, error: null });
+    render(<AuthScreen />);
+    expect(screen.queryByLabelText(/invite code/i)).toBeNull();
+    fill();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    });
+    expect(authMock.signUp.mock.calls[0][0].options.data).not.toHaveProperty('referral_code');
+  });
+
+  it('refuses a mistyped invite code before signing up', async () => {
+    render(<AuthScreen />);
+    fireEvent.click(screen.getByRole('button', { name: /have an invite code/i }));
+    fireEvent.change(screen.getByLabelText(/invite code/i), { target: { value: 'ab1' } });
+    fill();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    });
+    expect(authMock.signUp).not.toHaveBeenCalled();
+    expect(screen.getByText(/invite code is not valid/i)).toBeTruthy();
+  });
+});

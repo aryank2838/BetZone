@@ -3,6 +3,7 @@ import type { AdminGameOption } from './gameOptions';
 import { BET_TYPES, type BetType, type Game } from '@/types';
 import { CardSkeleton } from '@/components/Skeleton';
 import { useFormat } from '@/i18n/useFormat';
+import SignupFunnel from './SignupFunnel';
 
 export interface AdminStats {
   total_users: number;
@@ -40,6 +41,8 @@ export default function StatsTab({ games, stats, loading, roundDate, onRoundDate
         <StatCard icon={Coins} label="Play balance" value={stats.total_points} color="amber" />
         <StatCard icon={Wallet} label="Wallet balance" value={stats.total_wallet} color="emerald" />
       </div>
+
+      <SignupFunnel />
 
       <div>
         <label className="block text-xs text-ink-muted mb-1.5">Selection round date (IST)</label>

@@ -8,7 +8,9 @@ import NotConfigured from '@/components/NotConfigured';
 import { initializeMonitoring } from '@/lib/monitoring';
 import { missingSupabaseConfig, supabaseConfigured } from '@/lib/supabase';
 import { captureInstallPrompt, registerServiceWorker } from '@/lib/installPrompt';
+import { captureReferralFromUrl } from '@/lib/referral';
 
+captureReferralFromUrl();
 void initializeMonitoring();
 captureInstallPrompt();
 registerServiceWorker();

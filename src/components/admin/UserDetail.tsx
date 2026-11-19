@@ -8,6 +8,7 @@ import { friendlyErrorDetails } from '@/lib/errors';
 import { BET_TYPES, type BetType } from '@/types';
 import { LEDGER_REASON_LABELS, ledgerMetadataSummary, picksSummary } from './userDetailFormat';
 import ConfirmDialog from './ConfirmDialog';
+import UserReferrals from './UserReferrals';
 
 interface UserRecord {
   id: string;
@@ -136,6 +137,8 @@ export default function UserDetail({ userId, onBack }: { userId: string; onBack:
             </dl>
           ) : <Empty text="No play limits set." />}
         </Section>
+
+        <UserReferrals userId={userId} />
 
         <Section title="Recent ledger (up to 100)">
           {detail.ledger.length ? detail.ledger.map((row) => (

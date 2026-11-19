@@ -10,6 +10,7 @@ const LEDGER_METADATA_LABELS: Array<[key: string, label: string]> = [
 export const LEDGER_REASON_LABELS: Record<string, string> = {
   signup_bonus: 'Signup bonus',
   first_deposit_bonus: 'First-deposit bonus',
+  referral_bonus: 'Referral bonus',
   selection_submit: 'Bet placed',
   winning_payout: 'Winnings',
   payout: 'Winnings',

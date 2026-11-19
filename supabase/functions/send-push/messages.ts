@@ -6,7 +6,9 @@ export type PushKind =
   | 'deposit_rejected'
   | 'withdrawal_approved'
   | 'withdrawal_rejected'
-  | 'winnings';
+  | 'winnings'
+  | 'match_starting'
+  | 'referral_bonus';
 
 export type PushLanguage = 'en' | 'hi' | 'mr';
 
@@ -44,6 +46,16 @@ const TEXT: Record<PushLanguage, Record<PushKind, Template>> = {
       bodyWithReason: '₹{amount} is back in your balance. Reason: {reason}',
     },
     winnings: { title: 'You won! 🎉', body: '₹{amount} in winnings has been added to your balance.' },
+    match_starting: {
+      title: 'Your match starts soon',
+      body: 'A match you bet ₹{amount} on starts soon.',
+      bodyWithReason: '{reason} starts soon. You have ₹{amount} on it.',
+    },
+    referral_bonus: {
+      title: 'Referral bonus 🎉',
+      body: 'A friend you invited added money. ₹{amount} bonus is in your play balance.',
+      bodyWithReason: '{reason} added money. ₹{amount} bonus is in your play balance.',
+    },
   },
   hi: {
     deposit_approved: { title: 'पैसे जुड़ गए', body: '₹{amount} आपके BetZone बैलेंस में जुड़ गए हैं।' },
@@ -59,6 +71,16 @@ const TEXT: Record<PushLanguage, Record<PushKind, Template>> = {
       bodyWithReason: '₹{amount} आपके बैलेंस में वापस आ गए हैं। कारण: {reason}',
     },
     winnings: { title: 'आप जीत गए! 🎉', body: 'जीत के ₹{amount} आपके बैलेंस में जुड़ गए हैं।' },
+    match_starting: {
+      title: 'आपका मैच जल्द शुरू होगा',
+      body: 'जिस मैच पर आपने ₹{amount} की बेट लगाई है, वह जल्द शुरू होगा।',
+      bodyWithReason: '{reason} जल्द शुरू होगा। इस पर आपके ₹{amount} लगे हैं।',
+    },
+    referral_bonus: {
+      title: 'रेफ़रल बोनस 🎉',
+      body: 'आपके बुलाए दोस्त ने पैसे जोड़े। ₹{amount} बोनस आपके प्ले बैलेंस में जुड़ गया है।',
+      bodyWithReason: '{reason} ने पैसे जोड़े। ₹{amount} बोनस आपके प्ले बैलेंस में जुड़ गया है।',
+    },
   },
   mr: {
     deposit_approved: { title: 'पैसे जोडले गेले', body: '₹{amount} तुमच्या BetZone बॅलन्समध्ये जोडले गेले आहेत.' },
@@ -74,6 +96,16 @@ const TEXT: Record<PushLanguage, Record<PushKind, Template>> = {
       bodyWithReason: '₹{amount} तुमच्या बॅलन्समध्ये परत आले आहेत. कारण: {reason}',
     },
     winnings: { title: 'तुम्ही जिंकलात! 🎉', body: 'जिंकलेले ₹{amount} तुमच्या बॅलन्समध्ये जोडले आहेत.' },
+    match_starting: {
+      title: 'तुमचा सामना लवकरच सुरू होईल',
+      body: 'ज्या सामन्यावर तुम्ही ₹{amount} ची बेट लावली आहे, तो लवकरच सुरू होईल.',
+      bodyWithReason: '{reason} लवकरच सुरू होईल. यावर तुमचे ₹{amount} लागले आहेत.',
+    },
+    referral_bonus: {
+      title: 'रेफरल बोनस 🎉',
+      body: 'तुम्ही बोलावलेल्या मित्राने पैसे जोडले. ₹{amount} बोनस तुमच्या प्ले बॅलन्समध्ये जोडला आहे.',
+      bodyWithReason: '{reason} ने पैसे जोडले. ₹{amount} बोनस तुमच्या प्ले बॅलन्समध्ये जोडला आहे.',
+    },
   },
 };
 
@@ -83,6 +115,8 @@ const URLS: Record<PushKind, string> = {
   withdrawal_approved: '/?open=money',
   withdrawal_rejected: '/?open=money',
   winnings: '/?open=bets',
+  match_starting: '/?open=sports',
+  referral_bonus: '/?open=money',
 };
 
 export function formatRupees(amount: number): string {
@@ -103,7 +137,9 @@ export function buildMessage(kind: PushKind, amount: number, reason: string | nu
   const body = trimmedReason && template.bodyWithReason
     ? fill(template.bodyWithReason, { amount: formatRupees(amount), reason: trimmedReason })
     : fill(template.body, { amount: formatRupees(amount) });
-  return { title: template.title, body, url: URLS[kind], tag: kind };
+  // One reminder per match, so two matches do not replace each other.
+  const tag = kind === 'match_starting' && trimmedReason ? `${kind}:${trimmedReason}` : kind;
+  return { title: template.title, body, url: URLS[kind], tag };
 }
 
 /**

@@ -10,6 +10,7 @@ export interface LedgerCsvEntry {
 const REASON_LABELS: Record<string, string> = {
   signup_bonus: 'Signup bonus',
   first_deposit_bonus: 'First-deposit bonus',
+  referral_bonus: 'Referral bonus',
   selection_submit: 'Game entry',
   winning_payout: 'Winnings',
   payout: 'Winnings',

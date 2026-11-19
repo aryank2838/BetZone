@@ -97,7 +97,8 @@ Deno.serve(async (req) => {
     try {
       const { result } = await sendPush(sub, message, vapid, {
         urgency: 'high',
-        ttlSeconds: event.kind === 'winnings' ? 6 * 60 * 60 : 24 * 60 * 60,
+        // A match reminder is useless after kick-off, so it expires in 30 minutes.
+        ttlSeconds: event.kind === 'match_starting' ? 30 * 60 : event.kind === 'winnings' ? 6 * 60 * 60 : 24 * 60 * 60,
       });
       if (result === 'sent') {
         sent += 1;

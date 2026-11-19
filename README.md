@@ -34,6 +34,8 @@ DB=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/database_regressions.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/signup_protection.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/email_verification.sql
+psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/funnel_and_reminders.sql
+psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/referrals.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/first_deposit_bonus.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/sports_pools.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/admin_bets_board.sql
@@ -170,6 +172,12 @@ Players get into the app straight after signing up: in **Authentication → Prov
 - The daily clean-up (`delete_stale_unconfirmed_users`) deletes accounts that never verified, are over 30 days old, have not logged in for 30 days and have no money or bet history.
 
 Deploy order: push migration `20261119090000_verify_email_before_withdrawal.sql` **before** the frontend that reads `email_verified_at`, then turn off **Confirm email**.
+
+## Refer a friend
+
+Every player has a 6-character invite code and a link `<VITE_SITE_URL>/?ref=CODE` (home screen: copy link, share on WhatsApp). The app keeps `?ref=` from the link and fills in the optional invite-code field on sign-up; the code goes in the sign-up metadata (`referral_code`) and sets `profiles.referred_by` once. Unknown codes are ignored and never block a sign-up.
+
+When the friend's **first** deposit is approved, the inviter gets 10% of it as play balance (`referral_bonus` ledger row; bet only, winnings withdrawable as usual): only for a first deposit of at least 100, at most 200 per friend, at most 20 rewarded friends per inviter per 30 days, and nothing for banned or admin inviters. Every outcome is recorded in `referral_rewards` (one row per friend). The rules live in `referral_rules()`. The admin user page shows who invited the player and the friends they invited.
 
 ## Signup protection
 

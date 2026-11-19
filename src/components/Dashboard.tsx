@@ -22,6 +22,7 @@ import type { MoneyTab } from '@/components/BalancePage';
 import BottomNav, { type TabView } from '@/components/BottomNav';
 import Alert from '@/components/ui/Alert';
 import { SectionTitle } from '@/components/ui/Card';
+import ReferralCard from '@/components/ReferralCard';
 import { WITH_BOTTOM_NAV } from '@/components/ui/layout';
 import { useMyLimits, activePlayRestriction, formatLimitEnd } from '@/lib/useMyLimits';
 import { CardSkeleton } from '@/components/Skeleton';
@@ -369,6 +370,8 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
             })()}
           </div>
         </section>
+
+        {profile && !profile.is_admin && <ReferralCard />}
 
         <InstallBanner />
 

@@ -39,6 +39,7 @@ interface LedgerEntry {
 const REASONS: Record<string, { label: TranslationKey; icon: typeof Gift }> = {
   signup_bonus: { label: 'history.signupBonus', icon: Gift },
   first_deposit_bonus: { label: 'history.firstDepositBonus', icon: Gift },
+  referral_bonus: { label: 'history.referralBonus', icon: Gift },
   selection_submit: { label: 'history.bet', icon: Dice1 },
   winning_payout: { label: 'history.winnings', icon: Trophy },
   payout: { label: 'history.winnings', icon: Trophy },
