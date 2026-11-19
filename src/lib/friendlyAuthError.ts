@@ -29,7 +29,20 @@ export function friendlyAuthError(message: string): string {
   if (normalizedMessage.includes('unable to validate') || normalizedMessage.includes('invalid email')) {
     return translate('authErr.invalidEmail');
   }
-  if (normalizedMessage.includes('rate limit') || normalizedMessage.includes('too many')) {
+  // verifyOtp() with a wrong, old or already-used code.
+  if (
+    normalizedMessage.includes('token has expired or is invalid')
+    || normalizedMessage.includes('otp_expired')
+    || normalizedMessage.includes('invalid otp')
+  ) {
+    return translate('authErr.codeInvalid');
+  }
+  if (
+    normalizedMessage.includes('rate limit')
+    || normalizedMessage.includes('too many')
+    // "For security purposes, you can only request this after 42 seconds."
+    || normalizedMessage.includes('for security purposes')
+  ) {
     return translate('authErr.tooMany');
   }
   if (normalizedMessage.includes('network') || normalizedMessage.includes('fetch')) {

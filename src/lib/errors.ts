@@ -60,6 +60,12 @@ export function friendlyError(error: unknown): FriendlyError {
   if (/not authenticated|jwt expired|invalid jwt/.test(message)) {
     return mappedError('errors.login', 'login');
   }
+  if (message === 'email_not_verified') {
+    return mappedError('errors.emailNotVerified', 'help');
+  }
+  if (message === 'email_code_required') {
+    return mappedError('errors.emailCodeRequired', 'retry');
+  }
   if (/terms_not_accepted/.test(message)) {
     return mappedError('errors.terms', 'help');
   }

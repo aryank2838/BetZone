@@ -16,7 +16,8 @@ UPDATE public.profiles
 SET is_admin = (id = '00000000-0000-4000-8000-000000000001'),
     points = 100000,
     wallet = 0,
-    is_banned = false
+    is_banned = false,
+    email_verified_at = now()
 WHERE id IN (
   '00000000-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-000000000002',
@@ -1204,6 +1205,8 @@ VALUES (
   'db-test-user5@example.invalid', '', now(), '{}',
   '{"display_name":"DB test user 5","accepted_terms":true,"terms_version":"test"}'
 );
+UPDATE public.profiles SET email_verified_at = now()
+WHERE id = '00000000-0000-4000-8000-000000000005';
 
 DO $e1_test$
 DECLARE

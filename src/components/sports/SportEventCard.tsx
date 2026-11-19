@@ -87,9 +87,11 @@ function StatusPill({ event, nowMs, open }: { event: SportEvent; nowMs: number; 
   return <span className={`${base} border-surface-strong text-ink-soft`}>{t('sports.waiting')}</span>;
 }
 
-export default function SportEventCard({ event, nowMs, minBet, maxBet, houseSeed, onPlaced, onAddFunds }: {
+export default function SportEventCard({ event, nowMs, popular = false, minBet, maxBet, houseSeed, onPlaced, onAddFunds }: {
   event: SportEvent;
   nowMs: number;
+  /** One of the upcoming matches with the most player money. */
+  popular?: boolean;
   minBet: number;
   maxBet: number;
   /** House money an untouched match gets on each side with its first bet. */
@@ -134,7 +136,14 @@ export default function SportEventCard({ event, nowMs, minBet, maxBet, houseSeed
         <p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
           <span aria-hidden="true">{sportIcon} </span>{event.competition_name}
         </p>
-        <StatusPill event={event} nowMs={nowMs} open={open} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {popular && open && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/60 bg-orange-500/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-orange-200">
+              <span aria-hidden="true">🔥</span>{t('sports.popular')}
+            </span>
+          )}
+          <StatusPill event={event} nowMs={nowMs} open={open} />
+        </div>
       </div>
 
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 pb-3 pt-3">

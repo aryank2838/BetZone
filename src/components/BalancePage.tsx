@@ -6,6 +6,8 @@ import { useUserRequests } from '@/lib/useUserRequests';
 import { useMyLimits, activePlayRestriction, formatLimitEnd } from '@/lib/useMyLimits';
 import { type WalletStatus } from '@/components/WithdrawalForm';
 import WithdrawalForm from '@/components/WithdrawalForm';
+import VerifyEmailCard from '@/components/VerifyEmailCard';
+import { useAuth } from '@/lib/auth';
 import HelpButton from '@/components/HelpButton';
 import { CardSkeleton } from '@/components/Skeleton';
 import AddMoneyPanel from '@/components/money/AddMoneyPanel';
@@ -47,6 +49,9 @@ export default function BalancePage({ initialTab = 'add', onBalanceChanged, onOp
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<{ message: string; raw?: string } | null>(null);
   const tabRefs = useRef<Record<MoneyTab, HTMLButtonElement | null>>({ add: null, withdraw: null, history: null });
+  const { profile } = useAuth();
+  // Only once the profile is loaded: null means not verified yet.
+  const needsEmailCheck = profile != null && profile.email_verified_at === null;
   const userRequests = useUserRequests();
   const { limits } = useMyLimits();
   const restriction = activePlayRestriction(limits);
@@ -183,7 +188,9 @@ export default function BalancePage({ initialTab = 'add', onBalanceChanged, onOp
             <div className="space-y-4">
               {approvalTimeNote && <Alert tone="info">{approvalTimeNote}</Alert>}
               <Card className="space-y-4">
-                <WithdrawalForm status={walletStatus} onSubmitted={afterRequest} />
+                {needsEmailCheck
+                  ? <VerifyEmailCard />
+                  : <WithdrawalForm status={walletStatus} onSubmitted={afterRequest} />}
               </Card>
               <p className="px-1 text-xs text-ink-muted">{t('withdraw.rules')}</p>
             </div>

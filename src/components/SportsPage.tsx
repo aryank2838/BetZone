@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Trophy } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { useVisibleInterval } from '@/lib/useVisibleInterval';
-import { subjectTeam, type MySportBet, type Sport, type SportEventsResponse } from '@/lib/sportsPool';
+import { popularIds, sortMatches, subjectTeam, type MySportBet, type Sport, type SportEventsResponse } from '@/lib/sportsPool';
 import PageHeader from '@/components/ui/PageHeader';
 import Alert from '@/components/ui/Alert';
 import Badge from '@/components/ui/Badge';
@@ -56,7 +56,12 @@ export default function SportsPage({ onAddFunds }: { onAddFunds: () => void }) {
   const sports: Sport[] = data
     ? (['football', 'cricket'] as Sport[]).filter((s) => (s === 'football' ? data.football_enabled : data.cricket_enabled))
     : [];
-  const events = (data?.events ?? []).filter((event) => event.sport === sport);
+  // Sorted against the last load's time, so cards don't jump around every second.
+  const { events, popular } = useMemo(() => {
+    const forSport = (data?.events ?? []).filter((event) => event.sport === sport);
+    const now = Date.now();
+    return { events: sortMatches(forSport, now), popular: popularIds(forSport, now) };
+  }, [data, sport]);
   const feePercent = events[0]?.fee_percent ?? 10;
 
   const afterBet = async () => {
@@ -118,6 +123,7 @@ export default function SportsPage({ onAddFunds }: { onAddFunds: () => void }) {
                     <SportEventCard
                       event={event}
                       nowMs={nowMs}
+                      popular={popular.has(event.id)}
                       minBet={data.min_bet}
                       maxBet={data.max_bet}
                       houseSeed={data.house_seed ?? 0}

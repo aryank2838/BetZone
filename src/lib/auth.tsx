@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadProfile = useCallback(async (userId: string): Promise<Profile> => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, display_name, points, wallet, is_admin, is_banned, created_at, terms_accepted_at, terms_version, age_confirmed')
+      .select('id, display_name, points, wallet, is_admin, is_banned, created_at, terms_accepted_at, terms_version, age_confirmed, email_verified_at')
       .eq('id', userId)
       .maybeSingle();
     if (error) throw error;

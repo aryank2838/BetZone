@@ -78,6 +78,8 @@ export interface Profile {
   terms_accepted_at?: string | null;
   terms_version?: string | null;
   age_confirmed?: boolean;
+  /** Set once the player has verified their email (needed before the first withdrawal). */
+  email_verified_at?: string | null;
 }
 
 export interface SavedSelection {

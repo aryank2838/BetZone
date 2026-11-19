@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
 import { BET_TYPES, type BetType } from '@/types';
 import { LEDGER_REASON_LABELS, ledgerMetadataSummary, picksSummary } from './userDetailFormat';
+import ConfirmDialog from './ConfirmDialog';
 
 interface UserRecord {
   id: string;
@@ -19,6 +20,8 @@ interface UserRecord {
   age_confirmed: boolean;
   terms_accepted_at: string | null;
   terms_version: string | null;
+  email?: string | null;
+  email_verified_at?: string | null;
 }
 
 interface LimitsRecord {
@@ -56,6 +59,27 @@ export default function UserDetail({ userId, onBack }: { userId: string; onBack:
   const [detail, setDetail] = useState<UserDetailData | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [confirmVerify, setConfirmVerify] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+
+  const markVerified = async () => {
+    setVerifying(true);
+    setVerifyError('');
+    try {
+      const { data, error: rpcError } = await supabase.rpc('admin_mark_email_verified', { p_user_id: userId });
+      if (rpcError) throw rpcError;
+      const verifiedAt = (data as { email_verified_at?: string } | null)?.email_verified_at ?? new Date().toISOString();
+      setDetail((current) => current && { ...current, profile: { ...current.profile, email_verified_at: verifiedAt } });
+      setConfirmVerify(false);
+    } catch (rpcError) {
+      const friendly = friendlyErrorDetails(rpcError);
+      setVerifyError(friendly.raw ? `${friendly.message} ${friendly.raw}` : friendly.message);
+      setConfirmVerify(false);
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -87,6 +111,17 @@ export default function UserDetail({ userId, onBack }: { userId: string; onBack:
           <p className="mt-1 break-all text-xs text-ink-muted">{detail.profile.id}</p>
           <p className="mt-2 text-sm text-ink-soft">Play balance {formatNumber(detail.profile.points)} · Wallet {formatNumber(detail.profile.wallet)}</p>
           <p className="mt-1 text-xs text-ink-muted">Joined {when(detail.profile.created_at)} · {detail.profile.is_banned ? 'Banned' : 'Active'} · {detail.profile.is_admin ? 'Admin' : 'User'}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
+            <span className="break-all">Email: {detail.profile.email || '—'}</span>
+            <span aria-hidden="true">·</span>
+            {detail.profile.email_verified_at
+              ? <span className="text-emerald-300">Verified {when(detail.profile.email_verified_at)}</span>
+              : <>
+                <span className="text-amber-300">Not verified (can't withdraw yet)</span>
+                <button type="button" onClick={() => setConfirmVerify(true)} className="tap-target rounded-lg border border-surface-strong px-2.5 py-1 text-xs font-semibold text-ink-strong hover:bg-surface-raised">Mark email verified</button>
+              </>}
+          </div>
+          {verifyError && <p role="alert" className="mt-1 text-xs text-rose-300">{verifyError}</p>}
           <p className="mt-1 text-xs text-ink-muted">Age confirmed: {detail.profile.age_confirmed ? 'Yes' : 'No'} · Terms: {detail.profile.terms_version ? `${detail.profile.terms_version} (accepted ${when(detail.profile.terms_accepted_at)})` : 'Not accepted'}</p>
         </header>
 
@@ -142,6 +177,20 @@ export default function UserDetail({ userId, onBack }: { userId: string; onBack:
           )) : <Empty text="No support tickets." />}
         </Section>
       </>}
+      {confirmVerify && detail && (
+        <ConfirmDialog
+          content={{
+            title: 'Mark email as verified?',
+            rows: [['Player', detail.profile.display_name || 'Unnamed user'], ['Email', detail.profile.email || '—']],
+            warning: 'Only do this if you are sure the player owns this email, for example they wrote to you from it. It lets them request withdrawals.',
+            confirmLabel: 'Mark verified',
+            danger: false,
+          }}
+          busy={verifying}
+          onConfirm={() => void markVerified()}
+          onCancel={() => setConfirmVerify(false)}
+        />
+      )}
     </section>
   );
 }

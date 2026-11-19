@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimatePayout, isBettable, poolForEstimate, subjectTeam, thinSide, yesShare } from './sportsPool';
+import { estimatePayout, isBettable, playerMoney, poolForEstimate, popularIds, sortMatches, subjectTeam, thinSide, yesShare, type SportEvent } from './sportsPool';
 
 describe('house money', () => {
   it('counts the coming house money on a match that has not had it yet', () => {
@@ -74,5 +74,57 @@ describe('helpers', () => {
     expect(isBettable({ ...event, starts_at: '2026-11-20T09:00:00Z' }, now)).toBe(false);
     expect(isBettable({ ...event, state: 'closed' }, now)).toBe(false);
     expect(isBettable({ ...event, provider_status: 'live' }, now)).toBe(false);
+  });
+});
+
+describe('match order', () => {
+  const now = Date.parse('2026-11-19T12:00:00Z');
+  const match = (id: string, over: Partial<SportEvent> = {}): SportEvent => ({
+    id, sport: 'football', competition: 'PL', competition_name: 'Premier League',
+    home_team: 'A', away_team: 'B', subject_side: 'home',
+    starts_at: '2026-11-20T12:00:00Z', state: 'open', provider_status: 'scheduled',
+    home_score: null, away_score: null, outcome: null, void_reason: null, fee_percent: 10,
+    yes_total: 0, no_total: 0, house_yes: 0, house_no: 0, house_seeded: false, my_yes: 0, my_no: 0,
+    ...over,
+  });
+
+  it('leaves house money out of player money', () => {
+    expect(playerMoney(match('x', { yes_total: 150, no_total: 50, house_yes: 50, house_no: 50 }))).toBe(100);
+  });
+
+  it('puts my matches first, then the ones with the most player money', () => {
+    const events = [
+      match('soon-empty'),
+      match('house-only', { yes_total: 50, no_total: 50, house_yes: 50, house_no: 50, house_seeded: true }),
+      match('small', { yes_total: 100 }),
+      match('mine-later', { starts_at: '2026-11-21T12:00:00Z', yes_total: 20, my_yes: 20 }),
+      match('big', { yes_total: 300, no_total: 200 }),
+      match('mine-soon', { starts_at: '2026-11-19T18:00:00Z', no_total: 10, my_no: 10 }),
+      match('finished', { state: 'settled', provider_status: 'finished', starts_at: '2026-11-18T12:00:00Z', yes_total: 900, my_yes: 900 }),
+    ];
+    expect(sortMatches(events, now).map((e) => e.id))
+      .toEqual(['mine-soon', 'mine-later', 'big', 'small', 'soon-empty', 'house-only', 'finished']);
+  });
+
+  it('marks the top three upcoming matches with ₹500+ of player money as popular', () => {
+    const events = [
+      match('a', { yes_total: 600 }),
+      match('b', { yes_total: 900 }),
+      match('c', { yes_total: 800 }),
+      match('d', { yes_total: 700 }),
+      match('house-only', { yes_total: 2000, house_yes: 2000 }),
+      match('finished', { state: 'settled', provider_status: 'finished', starts_at: '2026-11-18T12:00:00Z', yes_total: 900 }),
+    ];
+    expect([...popularIds(events, now)].sort()).toEqual(['b', 'c', 'd']);
+  });
+
+  it('needs at least ₹500 of player money for the badge', () => {
+    const events = [
+      match('exactly-500', { yes_total: 300, no_total: 200 }),
+      match('499', { yes_total: 499 }),
+      // 600 in the pool, but 200 of it is house money.
+      match('400-from-players', { yes_total: 400, no_total: 200, house_no: 200, house_seeded: true }),
+    ];
+    expect([...popularIds(events, now)]).toEqual(['exactly-500']);
   });
 });

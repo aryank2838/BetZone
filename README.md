@@ -33,6 +33,7 @@ supabase db reset
 DB=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/database_regressions.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/signup_protection.sql
+psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/email_verification.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/first_deposit_bonus.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/sports_pools.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f supabase/tests/admin_bets_board.sql
@@ -158,17 +159,29 @@ The Content-Security-Policy meta tag is generated at build time (`vite/securityC
 
 The app includes an install manifest with PNG icons (192, 512, maskable 512), a 180 px Apple touch icon and a 1200×630 `og-image.png` for link previews; `favicon.svg` is the only SVG used by the page (the other SVGs in `public/` are the source artwork). It intentionally does not register a service worker or cache API or betting data for offline use.
 
+## Sign-up and email verification
+
+Players get into the app straight after signing up: in **Authentication → Providers → Email**, **Confirm email** is turned **off**. Their email is verified once, with a code, before their first withdrawal (Money → Withdraw). `request_withdrawal` refuses with `EMAIL_NOT_VERIFIED` until `profiles.email_verified_at` is set.
+
+- The app sends the code with `supabase.auth.signInWithOtp` and checks it with `verifyOtp`, then calls `mark_email_verified()`. That function only accepts a session started from an email (JWT `amr` method `otp`, `magiclink` or `recovery`), so a password login cannot mark itself verified.
+- The code arrives with the **Magic Link** email template. In **Authentication → Email Templates → Magic Link**, the template must show `{{ .Token }}` (the code). Keep **Email OTP length** at 6.
+- Admins can verify a player by hand on the admin user page (**Mark email verified**); this is logged as `verify_email`.
+- Changing an account's email clears the verification.
+- The daily clean-up (`delete_stale_unconfirmed_users`) deletes accounts that never verified, are over 30 days old, have not logged in for 30 days and have no money or bet history.
+
+Deploy order: push migration `20261119090000_verify_email_before_withdrawal.sql` **before** the frontend that reads `email_verified_at`, then turn off **Confirm email**.
+
 ## Signup protection
 
-Signup protection uses email confirmation, normalized-email uniqueness, a disposable-domain blocklist, and Supabase Auth rate limits. There is no signup bonus: new accounts start at 0. Instead, when an admin approves a user's first deposit, the user gets 5% of it as bonus play points (at least 10, no cap; first deposits under 50 get none), recorded as a `first_deposit_bonus` ledger row. The blocklist includes about 10,000 domains from the public disposable-email-domains list. The email-normalization migration emits a database `NOTICE` listing any pre-existing normalized duplicates and creates a post-migration partial unique index instead of failing; review that notice and resolve any existing duplicates before replacing the partial index with a full unique index.
+Signup protection uses normalized-email uniqueness, a disposable-domain blocklist, and Supabase Auth rate limits. There is no signup bonus: new accounts start at 0. Instead, when an admin approves a user's first deposit, the user gets 5% of it as bonus play points (at least 10, no cap; first deposits under 50 get none), recorded as a `first_deposit_bonus` ledger row. The blocklist includes about 10,000 domains from the public disposable-email-domains list. The email-normalization migration emits a database `NOTICE` listing any pre-existing normalized duplicates and creates a post-migration partial unique index instead of failing; review that notice and resolve any existing duplicates before replacing the partial index with a full unique index.
 
 In the Supabase Dashboard, open **Authentication → Rate Limits** and set:
 
 - **Rate limit for sending emails:** 2 per hour. This is the built-in email provider's limit; use a configured SMTP provider for production delivery.
 - **Rate limit for sign-ups and sign-ins:** 10–20 requests per 5 minutes per IP. Many mobile users in India share carrier IP addresses (CGNAT), so a lower value such as 5 locks out legitimate users; start at 15 and adjust from the Auth logs.
 - **Rate limit for sending SMS/OTP:** 1 message per hour. SMS is unused by BetZone.
-- **Email confirmation/OTP resend interval:** 60 seconds. The frontend also enforces a shared 60-second cooldown for signup confirmation and resend requests.
+- **Email confirmation/OTP resend interval:** 60 seconds. The frontend also waits 60 seconds between verification codes.
 
-In **Authentication → URL Configuration**, verify the production site URL and allowed confirmation redirect URLs. In **Authentication → Providers → Email**, keep signups and email confirmations enabled, configure production SMTP, and review the confirmation email template before opening registration.
+In **Authentication → URL Configuration**, verify the production site URL and allowed confirmation redirect URLs. In **Authentication → Providers → Email**, keep signups enabled, turn **Confirm email** off (see above), configure production SMTP, and review the confirmation email template before opening registration.
 
 To block another domain, run as a signed-in admin through the `admin_add_blocked_domain` RPC, for example `supabase.rpc('admin_add_blocked_domain', { p_domain: 'example.test' })`. The helper lowercases and validates the domain; matching also blocks its subdomains. Do not grant clients direct access to the blocklist table.

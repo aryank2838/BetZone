@@ -105,6 +105,54 @@ export function thinSide(yesTotal: number, noTotal: number): SportSide | null {
   return null;
 }
 
+/** Money players have put on a match, house money left out. */
+export function playerMoney(event: Pick<SportEvent, 'yes_total' | 'no_total' | 'house_yes' | 'house_no'>) {
+  return Math.max(0, event.yes_total + event.no_total - event.house_yes - event.house_no);
+}
+
+/** How many matches per sport get the Popular badge. */
+export const POPULAR_LIMIT = 3;
+/** Player money (₹, house money left out) a match needs for the Popular badge. */
+export const POPULAR_MIN_POOL = 500;
+
+/**
+ * Upcoming matches go in this order:
+ * 1. ones the viewer has bet on, soonest kick-off first;
+ * 2. ones other players have bet on, the most money first;
+ * 3. the rest, soonest kick-off first.
+ * Live and finished matches stay last, in the order the server sent.
+ */
+export function sortMatches<T extends SportEvent>(events: T[], nowMs: number): T[] {
+  const rank = (event: T) => {
+    if (!isBettable(event, nowMs)) return 3;
+    if (event.my_yes + event.my_no > 0) return 0;
+    return playerMoney(event) > 0 ? 1 : 2;
+  };
+  return events
+    .map((event, index) => ({ event, index, rank: rank(event), starts: Date.parse(event.starts_at) }))
+    .sort((a, b) => (
+      a.rank - b.rank
+      || (a.rank === 1 ? playerMoney(b.event) - playerMoney(a.event) : 0)
+      || (a.rank < 3 ? a.starts - b.starts : 0)
+      || a.index - b.index
+    ))
+    .map(({ event }) => event);
+}
+
+/**
+ * Ids of the upcoming matches with the most player money (up to POPULAR_LIMIT),
+ * counting only matches with at least POPULAR_MIN_POOL from players.
+ */
+export function popularIds(events: SportEvent[], nowMs: number): Set<string> {
+  return new Set(
+    events
+      .filter((event) => isBettable(event, nowMs) && playerMoney(event) >= POPULAR_MIN_POOL)
+      .sort((a, b) => playerMoney(b) - playerMoney(a))
+      .slice(0, POPULAR_LIMIT)
+      .map((event) => event.id),
+  );
+}
+
 /** Kick-off is in the future and the match is still open. */
 export function isBettable(event: Pick<SportEvent, 'state' | 'starts_at' | 'provider_status'>, nowMs: number) {
   return event.state === 'open' && event.provider_status === 'scheduled' && Date.parse(event.starts_at) > nowMs;
