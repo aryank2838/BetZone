@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, ListChecks, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { subjectTeam } from '@/lib/sportsPool';
@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button';
 import Badge, { type BadgeTone } from '@/components/ui/Badge';
 import { Card, SectionTitle } from '@/components/ui/Card';
 import { ListSkeleton } from '@/components/Skeleton';
+import SportEventBets from '@/components/admin/SportEventBets';
 
 /** Competitions on football-data.org's free plan. */
 const FOOTBALL_COMPETITIONS: Array<{ code: string; name: string }> = [
@@ -388,6 +389,7 @@ function MatchRow({ event, busy, onRefund, onSettle }: {
   onRefund: (event: AdminSportEvent) => void;
   onSettle: (event: AdminSportEvent, winner: 'home' | 'away' | 'draw') => void;
 }) {
+  const [showBets, setShowBets] = useState(false);
   const active = event.state === 'open' || event.state === 'closed';
   const canSettle = event.state === 'closed' && Date.now() > Date.parse(event.starts_at) + NINETY_MIN;
   const score = event.home_score != null && event.away_score != null ? ` · ${event.home_score}–${event.away_score}` : '';
@@ -414,6 +416,19 @@ function MatchRow({ event, busy, onRefund, onSettle }: {
           <p className="text-xs text-ink-muted">Includes house money: ₹{event.house_yes} on Yes, ₹{event.house_no} on No</p>
         )}
         {detail && <p className="text-xs text-ink-muted">{detail}</p>}
+        {event.bettors > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowBets((value) => !value)}
+            aria-expanded={showBets}
+            className="inline-flex min-h-[36px] items-center gap-1.5 text-sm font-semibold text-brand-300 hover:text-brand-200"
+          >
+            <ListChecks className="h-4 w-4" aria-hidden="true" />
+            {showBets ? 'Hide bets' : `See bets (${event.bettors} ${event.bettors === 1 ? 'player' : 'players'})`}
+            {showBets ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
+          </button>
+        )}
+        {showBets && <SportEventBets eventId={event.id} subject={subjectTeam(event)} />}
         {active && (
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" loading={busy} onClick={() => onRefund(event)}>Refund all</Button>

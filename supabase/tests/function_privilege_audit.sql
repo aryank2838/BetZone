@@ -43,6 +43,7 @@ INSERT INTO function_execute_allowlist (grantee, routine_name) VALUES
   ('authenticated', 'admin_set_admin'),
   ('authenticated', 'admin_send_test_push'),
   ('authenticated', 'admin_signup_funnel'),
+  ('authenticated', 'admin_sport_event_bets'),
   ('authenticated', 'admin_user_referrals'),
   ('authenticated', 'admin_set_app_setting'),
   ('authenticated', 'admin_set_game_holiday'),
