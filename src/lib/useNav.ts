@@ -21,7 +21,13 @@ function validNavState(value: unknown): value is NavState {
 }
 
 /** Screens a notification link (`/?open=…`) can open. */
-const OPEN_TARGETS: Record<string, NavView> = { money: 'balance', bets: 'mybets', sports: 'sports' };
+const OPEN_TARGETS: Record<string, NavView> = {
+  money: 'balance',
+  bets: 'mybets',
+  sports: 'sports',
+  // Admin alerts; the admin panel opens on its Requests tab.
+  'admin-requests': 'admin',
+};
 
 export function viewForOpenLink(url: string): NavView | null {
   try {

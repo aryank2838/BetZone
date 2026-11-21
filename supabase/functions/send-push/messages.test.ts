@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMessage, groupOutbox, normalizeLanguage, type OutboxRow } from './messages.ts';
+import { buildMessage, groupOutbox, normalizeLanguage, ttlSeconds, type OutboxRow } from './messages.ts';
 
 describe('push messages', () => {
   it('writes the amount with Indian digit grouping and opens the money screen', () => {
@@ -45,6 +45,33 @@ describe('push messages', () => {
     });
     expect(buildMessage('referral_bonus', 150, null, 'mr').body)
       .toBe('तुम्ही बोलावलेल्या मित्राने पैसे जोडले. ₹150 बोनस तुमच्या प्ले बॅलन्समध्ये जोडला आहे.');
+  });
+
+  it('alerts admins to a new request with the player name and opens the Requests tab', () => {
+    const deposit = buildMessage('admin_deposit', 2500, 'Ravi', 'en');
+    expect(deposit).toEqual({
+      title: 'New add-money request',
+      body: 'Ravi wants to add ₹2,500. Tap to review.',
+      url: '/?open=admin-requests',
+      tag: 'admin_deposit:Ravi:2500',
+    });
+    expect(buildMessage('admin_withdrawal', 800, null, 'en').body).toBe('₹800 to withdraw. Tap to review.');
+    // Two requests in a row stay as two notifications.
+    expect(buildMessage('admin_deposit', 500, 'Ravi', 'en').tag).not.toBe(deposit.tag);
+  });
+
+  it('reminds admins how many requests are waiting, as a count rather than rupees', () => {
+    expect(buildMessage('admin_waiting', 1200, '45', 'en').body).toBe('1200 waiting · oldest for 45 min. Tap to review.');
+    expect(buildMessage('admin_waiting', 3, '45', 'hi').body)
+      .toBe('3 अनुरोध इंतज़ार में · सबसे पुराना 45 मिनट से। देखने के लिए टैप करें।');
+    expect(buildMessage('admin_waiting', 3, '12', 'mr').tag).toBe('admin_waiting');
+  });
+
+  it('expires reminders sooner than money and request alerts', () => {
+    expect(ttlSeconds('admin_waiting')).toBe(30 * 60);
+    expect(ttlSeconds('match_starting')).toBe(30 * 60);
+    expect(ttlSeconds('admin_deposit')).toBe(6 * 60 * 60);
+    expect(ttlSeconds('deposit_approved')).toBe(24 * 60 * 60);
   });
 
   it('falls back to English for unknown languages', () => {

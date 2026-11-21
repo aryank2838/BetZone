@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, HelpCircle, X } from 'lucide-react';
+import { ChevronRight, Headset, HelpCircle, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
 import { useDialogA11y } from '@/lib/useDialogA11y';
@@ -33,7 +33,7 @@ const CATEGORIES: { id: string; label: TranslationKey }[] = [
 
 const FIELD = 'w-full rounded-control border bg-surface-raised p-3 text-sm text-ink-strong focus:border-brand-400 focus:outline-none';
 
-export default function HelpButton({ variant = 'icon' }: { variant?: 'icon' | 'row' }) {
+export default function HelpButton({ variant = 'icon' }: { variant?: 'icon' | 'row' | 'floating' }) {
   const { formatDate } = useFormat();
   const { t } = useT();
   const toast = useToast();
@@ -107,6 +107,17 @@ export default function HelpButton({ variant = 'icon' }: { variant?: 'icon' | 'r
           <HelpCircle className="h-4 w-4 text-ink-muted" aria-hidden="true" />
           <span className="flex-1">{t('help.title')}</span>
           <ChevronRight className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+        </button>
+      ) : variant === 'floating' ? (
+        // Home only: sits just above the bottom tab bar, clear of the content.
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={t('help.title')}
+          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-12 items-center gap-2 rounded-full border border-brand-500/60 bg-brand-600 px-4 text-sm font-semibold text-white shadow-lg shadow-black/40 transition-transform hover:bg-brand-500 active:scale-95 sm:right-[max(1rem,calc(50vw-21rem))]"
+        >
+          <Headset className="h-5 w-5" aria-hidden="true" />
+          {t('help.floating')}
         </button>
       ) : (
         <button type="button" onClick={() => setOpen(true)} aria-label={t('help.title')} className="tap-target rounded-control border border-surface-strong text-ink-soft hover:bg-surface-raised">

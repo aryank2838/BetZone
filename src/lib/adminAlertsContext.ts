@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { NotificationState } from '@/lib/adminAlerts';
+import type { PushState } from '@/lib/push';
 
 export interface PendingStats {
   pending_withdrawals_count: number;
@@ -22,6 +23,14 @@ export interface AdminAlertsValue {
   soundEnabled: boolean;
   setSoundEnabled: (enabled: boolean) => void;
   refresh: () => Promise<void>;
+  /** Web Push on this device: alerts arrive even when BetZone is closed. */
+  push: PushState;
+  pushBusy: boolean;
+  /** Turns phone alerts on (must run from a tap). Resolves to the new state. */
+  enablePush: () => Promise<PushState>;
+  disablePush: () => Promise<void>;
+  /** Queues a test notification to this admin's devices. */
+  sendTestPush: () => Promise<void>;
 }
 
 export const AdminAlertsContext = createContext<AdminAlertsValue | null>(null);

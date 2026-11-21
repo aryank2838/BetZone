@@ -7,6 +7,8 @@ import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { formatLimitEnd } from '@/lib/useMyLimits';
 import { firstDepositBonus } from '@/lib/firstDepositBonus';
 import { MAX_ORIGINAL_BYTES, MAX_UPLOAD_BYTES, shrinkImage } from '@/lib/shrinkImage';
+import { quickAmounts } from '@/lib/moneyAmounts';
+import AmountChips from '@/components/money/AmountChips';
 import Alert from '@/components/ui/Alert';
 import { PushPrompt } from '@/components/PushNotifications';
 import Button from '@/components/ui/Button';
@@ -17,6 +19,7 @@ import { interpolate, useT } from '@/i18n/useT';
 
 const INPUT = 'w-full rounded-control border border-surface-strong bg-surface-raised px-4 py-3 text-sm text-ink-strong focus:border-brand-400 focus:outline-none disabled:opacity-40';
 const UTR_PATTERN = /^[0-9A-Za-z]{8,30}$/;
+const ADD_PRESETS = [100, 500, 1000, 2000];
 
 function StepLabel({ step, htmlFor, children, required }: { step: number; htmlFor?: string; children: string; required?: boolean }) {
   const { t } = useT();
@@ -59,6 +62,8 @@ export default function AddMoneyPanel({
   const unavailable = !merchantUpiId || !!selfExcludedUntil;
   const amountValid = /^[0-9]+$/.test(amount) && Number(amount) > 0 && Number(amount) <= maxAmount;
   const amountValue = amountValid ? Number(amount) : 0;
+  const amountTooBig = /^[0-9]+$/.test(amount) && Number(amount) > maxAmount;
+  const utrValid = UTR_PATTERN.test(utr.trim());
 
   if (selfExcludedUntil) {
     return <Alert tone="warning">{interpolate(t('money.selfExcluded'), { date: formatLimitEnd(selfExcludedUntil) })}</Alert>;
@@ -189,7 +194,7 @@ export default function AddMoneyPanel({
     }
   };
 
-  const canSubmit = !unavailable && !submitting && amountValid && !!screenshotFile && UTR_PATTERN.test(utr.trim());
+  const canSubmit = !unavailable && !submitting && amountValid && !!screenshotFile && utrValid;
 
   return (
     <div className="space-y-4">
@@ -207,7 +212,16 @@ export default function AddMoneyPanel({
             placeholder={t('money.amountPlaceholder')}
             className={INPUT}
           />
-          <p className="mt-1.5 text-xs text-ink-muted">{interpolate(t('money.addLimit'), { max: formatNumber(maxAmount) })}</p>
+          <AmountChips
+            amounts={quickAmounts(ADD_PRESETS, maxAmount)}
+            selected={amountValue}
+            onPick={(value) => { setAmount(String(value)); setError(null); }}
+          />
+          {amountTooBig ? (
+            <p className="mt-1.5 text-xs font-medium text-rose-300" role="alert">{interpolate(t('money.amountMax'), { max: formatNumber(maxAmount) })}</p>
+          ) : (
+            <p className="mt-1.5 text-xs text-ink-muted">{interpolate(t('money.addLimit'), { max: formatNumber(maxAmount) })}</p>
+          )}
           {firstDepositBonusAvailable && (
             <p className="mt-1.5 text-xs font-medium text-amber-300">
               {!amountValid
@@ -291,13 +305,21 @@ export default function AddMoneyPanel({
 
         <div>
           <StepLabel step={4} htmlFor="add-funds-reference" required>{t('money.utr')}</StepLabel>
-          <input
-            id="add-funds-reference"
-            type="text" value={utr}
-            onChange={(event) => { setUtr(event.target.value); setError(null); }}
-            placeholder={interpolate(t('common.example'), { value: '412345678901' })}
-            className={INPUT}
-          />
+          <div className="relative">
+            <input
+              id="add-funds-reference"
+              type="text" value={utr}
+              // Payment apps show the UTR with spaces or dashes; only letters and digits count.
+              onChange={(event) => { setUtr(event.target.value.replace(/[^0-9A-Za-z]/g, '').slice(0, 30)); setError(null); }}
+              placeholder={interpolate(t('common.example'), { value: '412345678901' })}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              className={`${INPUT} pr-10 font-mono tracking-wide`}
+            />
+            {utrValid && <Check className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-brand-400" aria-label={t('money.utrLooksRight')} />}
+          </div>
           <p className="mt-1.5 text-xs text-ink-muted">{t('money.utrHelp')}</p>
         </div>
 
@@ -306,6 +328,12 @@ export default function AddMoneyPanel({
         <Button size="lg" fullWidth loading={submitting} disabled={!canSubmit} onClick={() => void handleSubmit()}>
           {t('money.sendForChecking')}
         </Button>
+        {!canSubmit && !submitting && amountValid && (
+          // Say what is still missing instead of leaving a grey button unexplained.
+          <p className="-mt-2 text-center text-xs text-ink-muted">
+            {!screenshotFile ? t('money.missingScreenshot') : t('money.missingUtr')}
+          </p>
+        )}
       </Card>
     </div>
   );

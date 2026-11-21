@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { formatCountdown } from '@/lib/countdown';
 import {
-  estimatePayout, isBettable, poolForEstimate, subjectTeam, thinSide, yesShare,
+  estimatePayout, isBettable, poolForEstimate, refundReasonKey, subjectTeam, thinSide, yesShare,
   type SportEvent, type SportSide,
 } from '@/lib/sportsPool';
 import { teamColor, teamInitials } from '@/lib/sportsLook';
@@ -13,7 +13,6 @@ import Button from '@/components/ui/Button';
 import { useToast } from '@/components/ui/toastContext';
 import { useFormat } from '@/i18n/useFormat';
 import { interpolate, useT } from '@/i18n/useT';
-import type { TranslationKey } from '@/i18n/context';
 
 const INPUT = 'w-full rounded-control border border-surface-strong bg-surface-raised px-4 py-3 text-base font-semibold tabular-nums text-ink-strong focus:outline-none';
 const DAY = 24 * 60 * 60 * 1000;
@@ -24,18 +23,6 @@ const SIDE = {
   yes: { focus: 'focus:border-emerald-400', text: 'text-emerald-300', strong: 'text-emerald-200', border: 'border-emerald-500/60', bg: 'bg-emerald-500/10', ring: 'ring-emerald-400', bar: 'bg-emerald-500', button: '!bg-emerald-500 !text-slate-950 hover:!bg-emerald-400' },
   no: { focus: 'focus:border-rose-400', text: 'text-rose-300', strong: 'text-rose-200', border: 'border-rose-500/60', bg: 'bg-rose-500/10', ring: 'ring-rose-400', bar: 'bg-rose-500', button: '!bg-rose-500 !text-white hover:!bg-rose-400' },
 } as const;
-
-const REFUND_REASONS: Record<string, TranslationKey> = {
-  one_sided: 'sports.reason.oneSided',
-  cancelled_or_postponed: 'sports.reason.cancelled',
-  start_moved_earlier: 'sports.reason.startMoved',
-  no_result: 'sports.reason.noResult',
-};
-
-function refundReasonKey(reason: string | null): TranslationKey {
-  if (reason && REFUND_REASONS[reason]) return REFUND_REASONS[reason];
-  return 'sports.reason.support';
-}
 
 function TeamBadge({ name }: { name: string }) {
   const color = teamColor(name);

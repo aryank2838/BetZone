@@ -1,4 +1,4 @@
-// send-push: delivers queued player notifications (push_outbox) as Web Push.
+// send-push: delivers queued player and admin notifications (push_outbox) as Web Push.
 // Called every minute by pg_cron, but only while the queue has unsent rows,
 // with the x-cron-secret header.
 //
@@ -10,7 +10,7 @@
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { sendPush, type VapidKeys } from '../_shared/webpush.ts';
-import { buildMessage, groupOutbox, normalizeLanguage, type OutboxRow } from './messages.ts';
+import { buildMessage, groupOutbox, normalizeLanguage, ttlSeconds, type OutboxRow } from './messages.ts';
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
@@ -97,8 +97,7 @@ Deno.serve(async (req) => {
     try {
       const { result } = await sendPush(sub, message, vapid, {
         urgency: 'high',
-        // A match reminder is useless after kick-off, so it expires in 30 minutes.
-        ttlSeconds: event.kind === 'match_starting' ? 30 * 60 : event.kind === 'winnings' ? 6 * 60 * 60 : 24 * 60 * 60,
+        ttlSeconds: ttlSeconds(event.kind),
       });
       if (result === 'sent') {
         sent += 1;

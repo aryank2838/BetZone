@@ -27,6 +27,9 @@ import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import { Card } from '@/components/ui/Card';
 import { useAdminAlerts } from '@/lib/adminAlertsContext';
+import AdminPushSetup from '@/components/admin/AdminPushSetup';
+import { LockedResultCard, PostedResultCard } from '@/components/admin/PostedResult';
+import { phaseState, type RoundResult } from '@/components/admin/resultPhase';
 import { formatClockTime } from '@/lib/countdown';
 import { currentResultRound } from '@/lib/adminOverview';
 
@@ -204,7 +207,7 @@ const groupOf = (tab: Tab): Group => (tab === 'requests' || tab === 'results' ||
 export default function AdminPanel({ onBack, initialTab = 'requests', initialGame }: AdminPanelProps) {
   const alerts = useAdminAlerts();
   const alertsVersion = alerts?.version ?? 0;
-  const { formatNumber } = useFormat();
+  const { formatNumber, formatDate } = useFormat();
   const { statuses: gameStatuses, refresh: refreshGameStatuses } = useGameStatus();
   const gameOptions = gameStatuses.map((status) => ({ game: status.game, label: status.label || GAME_LABELS[status.game] || status.game }));
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -369,6 +372,19 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
     else setLatestResult(null);
   };
 
+  // The posted result for the chosen game and round date: decides whether the
+  // open/close forms show, or the posted result in their place.
+  const [roundResult, setRoundResult] = useState<RoundResult | null | undefined>(undefined);
+  const roundRequest = useRef(0);
+  const loadRoundResult = useCallback(async (g: Game, date: string) => {
+    const current = ++roundRequest.current;
+    const { data, error } = await supabase.rpc('get_result_history', { p_game: g, p_limit: 100, p_offset: 0 });
+    if (current !== roundRequest.current) return;
+    // If this fails, the forms still show; the server refuses a second post.
+    const rows = error ? [] : (data as RoundResult[] | null) ?? [];
+    setRoundResult(rows.find((row) => row.round_date === date) ?? null);
+  }, []);
+
   const loadExposure = async (g: Game, date: string) => {
     if (!date) return;
     setLoadingExposure(true);
@@ -503,6 +519,13 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
   }, [tab, game, roundDate]);
 
   useEffect(() => {
+    if (tab !== 'results' || !roundDate) return;
+    setRoundResult(undefined);
+    setPayoutResult(null);
+    void loadRoundResult(game, roundDate);
+  }, [tab, game, roundDate, loadRoundResult]);
+
+  useEffect(() => {
     if (tab === 'users') loadUsers(userSearch);
     if (tab === 'settings') loadSettings();
   }, [tab, game, roundDate, selectionDate, loadUsers, loadSettings, userSearch]);
@@ -531,12 +554,15 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
       if (error) throw error;
       const result = data as PayoutResult;
       setPayoutResult(result);
-      setMessage({ kind: 'ok', text: `Open result ${p}-${digit} posted for ${roundDate}. Payouts processed.` });
+      // The open form is replaced by the posted result; no separate banner needed.
+      setRoundResult((current) => ({
+        round_date: roundDate, close_patti: null, close_digit: null, ...current, open_patti: p, open_digit: digit,
+      }));
       setOpenPatti('');
       setOpenDigit('');
       setConfirmPhase(null);
       setConfirmPatti('');
-      loadLatest(game); loadStats(); await loadExposure(game, roundDate);
+      loadLatest(game); loadStats(); void loadRoundResult(game, roundDate); await loadExposure(game, roundDate);
     } catch (err) { setMessage(errorNotice(err)); }
     finally { setPosting(false); }
   };
@@ -565,12 +591,14 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
       if (error) throw error;
       const result = data as PayoutResult;
       setPayoutResult(result);
-      setMessage({ kind: 'ok', text: `Close result ${p}-${digit} posted for ${roundDate}. Payouts processed.` });
+      setRoundResult((current) => ({
+        round_date: roundDate, open_patti: null, open_digit: null, ...current, close_patti: p, close_digit: digit,
+      }));
       setClosePatti('');
       setCloseDigit('');
       setConfirmPhase(null);
       setConfirmPatti('');
-      loadLatest(game); loadStats(); await loadExposure(game, roundDate);
+      loadLatest(game); loadStats(); void loadRoundResult(game, roundDate); await loadExposure(game, roundDate);
     } catch (err) { setMessage(errorNotice(err)); }
     finally { setPosting(false); }
   };
@@ -690,10 +718,37 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
     const preview = phase === 'open' ? openPreview : closePreview;
     const resultTime = phase === 'open' ? selectedStatus?.open_result_at : selectedStatus?.close_result_at;
     const ready = isValidPatti(patti) && /^[0-9]$/.test(digit) && Number(digit) === pattiDigit(patti) && !!roundDate;
+    const gameLabel = selectedStatus?.label || GAME_LABELS[game] || game;
+    const dateLabel = roundDate ? formatDate(`${roundDate}T12:00:00`, { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+    const state = phaseState(roundResult, phase);
+
+    if (state === 'loading') {
+      return <Card><div className="flex items-center justify-center py-6 text-ink-muted"><Loader2 className="h-4 w-4 animate-spin" aria-label="Checking this round" /></div></Card>;
+    }
+    if (state === 'posted' && roundResult) {
+      const sameRound = latestResult?.round_date === roundDate ? latestResult : null;
+      return (
+        <PostedResultCard
+          phase={phase}
+          gameLabel={gameLabel}
+          dateLabel={dateLabel}
+          patti={phase === 'open' ? roundResult.open_patti : roundResult.close_patti}
+          digit={(phase === 'open' ? roundResult.open_digit : roundResult.close_digit) ?? ''}
+          paid={sameRound ? (phase === 'open' ? sameRound.open_processed : sameRound.close_processed) : null}
+          postedAt={sameRound ? (phase === 'open' ? sameRound.open_posted_at : sameRound.close_posted_at) : null}
+          payout={payoutResult && payoutResult.status === 'processed' && payoutResult.phase === phase ? payoutResult : null}
+        />
+      );
+    }
+    if (state === 'locked') return <LockedResultCard gameLabel={gameLabel} dateLabel={dateLabel} dueAt={resultTime} />;
+
     return (
-      <Card>
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <h3 className="font-bold text-ink-strong">Post {phase} result</h3>
+      <Card className="border-amber-700/70">
+        <div className="mb-4 flex items-start justify-between gap-2">
+          <div>
+            <h3 className="font-bold text-ink-strong">Post {phase} result</h3>
+            <p className="mt-0.5 text-sm text-amber-200">{gameLabel} · {dateLabel}</p>
+          </div>
           {resultTime && <span className="text-xs text-ink-muted">Due {formatClockTime(resultTime)} IST</span>}
         </div>
         <div className="grid grid-cols-[2fr_1fr] gap-3">
@@ -882,15 +937,11 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
             {resultForm('close')}
 
             {message && <Alert tone={message.kind === 'ok' ? 'success' : 'error'} details={message.raw}>{message.text}</Alert>}
-            {payoutResult && payoutResult.status === 'processed' && (
-              <Alert tone="success" title={`${payoutResult.phase === 'open' ? 'Open' : 'Close'} payouts processed`}>
-                {payoutResult.winners} winner(s), ₹{formatNumber(payoutResult.total_paid)} paid out.
-              </Alert>
-            )}
           </section>
         )}
 
         {/* Requests tab */}
+        {tab === 'requests' && <AdminPushSetup variant="banner" />}
         {tab === 'requests' && (
           <RequestsTab
             withdrawals={withdrawals}
@@ -1012,6 +1063,11 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
           <section ref={resultConfirmRef} role="dialog" aria-modal="true" aria-labelledby="result-confirm-title" className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-card border border-surface-strong bg-surface p-5" onClick={(event) => event.stopPropagation()}>
             <header>
               <h3 id="result-confirm-title" className="text-lg font-bold">Confirm {confirmPhase} result</h3>
+              <p className="mt-2 inline-flex flex-wrap items-center gap-2 rounded-control border border-amber-700/70 bg-amber-950/40 px-3 py-1.5 text-sm font-semibold text-amber-100">
+                {selectedStatus?.label || GAME_LABELS[game] || game}
+                <span className={`rounded-full px-2 py-0.5 text-xs font-bold uppercase ${confirmPhase === 'open' ? 'bg-brand-950 text-brand-300' : 'bg-accent-950 text-accent-300'}`}>{confirmPhase}</span>
+                {roundDate && formatDate(`${roundDate}T12:00:00`, { weekday: 'short', day: 'numeric', month: 'short' })}
+              </p>
               <p className="mt-1 text-sm text-rose-300">Posting pays winning picks immediately. Payouts cannot be undone.</p>
             </header>
             <ResultPreviewCard {...(confirmPhase === 'open' ? openPreview : closePreview)} />

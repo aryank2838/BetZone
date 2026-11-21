@@ -12,6 +12,7 @@ import HelpButton from '@/components/HelpButton';
 import { CardSkeleton } from '@/components/Skeleton';
 import AddMoneyPanel from '@/components/money/AddMoneyPanel';
 import HistoryPanel, { type Breakdown } from '@/components/money/HistoryPanel';
+import PendingRequests from '@/components/money/PendingRequests';
 import PageHeader from '@/components/ui/PageHeader';
 import Alert from '@/components/ui/Alert';
 import { Card } from '@/components/ui/Card';
@@ -142,6 +143,10 @@ export default function BalancePage({ initialTab = 'add', onBalanceChanged, onOp
         ) : !loadError ? (
           <Alert>{t('money.loadFailed')}</Alert>
         ) : null}
+
+        {tab !== 'history' && (
+          <PendingRequests requests={userRequests.requests} note={approvalTimeNote} onOpen={() => setTab('history')} />
+        )}
 
         <div role="tablist" aria-label={t('money.title')} className="grid grid-cols-3 gap-1 rounded-card border border-surface-border bg-surface/80 p-1">
           {TABS.map(({ id, label, icon: Icon }) => {

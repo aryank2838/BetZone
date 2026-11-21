@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { GAME_LABELS, BET_TYPES, type Game, type BetType } from '@/types';
 import HelpButton from '@/components/HelpButton';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
-import { ReceiptText } from 'lucide-react';
+import { Dices, ReceiptText, Trophy } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
@@ -15,6 +15,9 @@ import { ListSkeleton } from '@/components/Skeleton';
 import { useFormat } from '@/i18n/useFormat';
 import { useGameStatus } from '@/lib/useGameStatus';
 import { roundNet, settledStake } from '@/lib/betRounds';
+import { readMyBetsTab, rememberMyBetsTab, type MyBetsTab } from '@/lib/myBetsTab';
+import type { MySportBetTotals } from '@/lib/sportsPool';
+import MySportBets from '@/components/sports/MySportBets';
 
 interface BetPick {
   number: string;
@@ -34,6 +37,7 @@ interface BetRoundRow {
 
 interface MyBetsPageProps {
   onGames: () => void;
+  onSports: () => void;
 }
 
 const PAGE_SIZE = 30;
@@ -49,9 +53,80 @@ function isBetRoundRow(value: unknown): value is BetRoundRow {
     && typeof row.pending_stake === 'number';
 }
 
-export default function MyBetsPage({ onGames }: MyBetsPageProps) {
+export default function MyBetsPage({ onGames, onSports }: MyBetsPageProps) {
+  const { t } = useT();
+  const { formatNumber } = useFormat();
+  const [remembered] = useState(readMyBetsTab);
+  const [tab, setTabState] = useState<MyBetsTab>(remembered ?? 'games');
+  const [sportTotals, setSportTotals] = useState<MySportBetTotals | null>(null);
+  const picked = useRef(remembered !== null);
+  const setTab = (next: MyBetsTab) => {
+    picked.current = true;
+    setTabState(next);
+    rememberMyBetsTab(next);
+  };
+
+  useEffect(() => {
+    let active = true;
+    supabase.rpc('get_my_sport_bet_totals').then(({ data, error }) => {
+      if (active && !error && data) setSportTotals(data as MySportBetTotals);
+    }, () => { /* the Sports tab shows its own error */ });
+    return () => { active = false; };
+  }, []);
+
+  // First visit with only sports bets: open on Sports instead of an empty list.
+  const [gamesEmpty, setGamesEmpty] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!picked.current && gamesEmpty && sportTotals && sportTotals.bet_count > 0) setTabState('sports');
+  }, [gamesEmpty, sportTotals]);
+
+  const openCount = sportTotals?.open_count ?? 0;
+  const TAB = 'flex min-h-[44px] items-center justify-center gap-2 rounded-control text-sm font-semibold transition-colors';
+
+  return (
+    <div className="min-h-screen bg-surface-page text-ink">
+      <PageHeader title={t('bets.title')} subtitle={t('bets.subtitle')} actions={<HelpButton />} />
+
+      <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 sm:px-5">
+        <div role="tablist" aria-label={t('bets.title')} className="grid grid-cols-2 gap-1 rounded-card border border-surface-border bg-surface/80 p-1">
+          {(['games', 'sports'] as const).map((value) => {
+            const selected = tab === value;
+            const Icon = value === 'games' ? Dices : Trophy;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setTab(value)}
+                className={`${TAB} ${selected ? 'bg-surface-raised text-ink-strong shadow-sm' : 'text-ink-muted hover:text-ink-soft'}`}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                {t(value === 'games' ? 'bets.tabGames' : 'bets.tabSports')}
+                {value === 'sports' && openCount > 0 && (
+                  <span className="min-w-[20px] rounded-full bg-amber-500 px-1.5 text-xs font-bold leading-5 text-slate-950">
+                    {formatNumber(openCount)}<span className="sr-only"> {t('bets.openSr')}</span>
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {tab === 'sports'
+          ? <MySportBets onSports={onSports} />
+          : <GameBets onGames={onGames} onLoaded={setGamesEmpty} />}
+      </main>
+    </div>
+  );
+}
+
+/** My Bets → Games: number-game rounds with filters. */
+function GameBets({ onGames, onLoaded }: { onGames: () => void; onLoaded: (empty: boolean) => void }) {
   const { formatNumber } = useFormat();
   const { t } = useT();
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
   const rupees = (value: number) => `₹${formatNumber(value)}`;
   const { statuses: gameStatuses } = useGameStatus();
   const gameLabel = (value: string) => gameStatuses.find((status) => status.game === value)?.label
@@ -94,6 +169,7 @@ export default function MyBetsPage({ onGames }: MyBetsPageProps) {
         setRows((current) => append ? [...current, ...nextRows] : nextRows);
         setOffset(nextOffset + nextRows.length);
         setHasMore(nextRows.length === PAGE_SIZE);
+        if (!append && !game && !from && !to) onLoadedRef.current(nextRows.length === 0);
       }
     } catch (error) {
       if (currentRequest !== requestId.current) return;
@@ -125,10 +201,7 @@ export default function MyBetsPage({ onGames }: MyBetsPageProps) {
   const FIELD = 'mt-1.5 w-full rounded-control border border-surface-strong bg-surface-raised px-3 py-2.5 text-sm text-ink-strong';
 
   return (
-    <div className="min-h-screen bg-surface-page text-ink">
-      <PageHeader title={t('bets.title')} subtitle={t('bets.subtitle')} actions={<HelpButton />} />
-
-      <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 sm:px-5">
+    <div className="space-y-5">
         <section aria-label={t('bets.filters')} className="grid grid-cols-1 gap-3 rounded-card border border-surface-border bg-surface/80 p-4 sm:grid-cols-3">
           <label className="text-sm text-ink-muted">
             {t('bets.game')}
@@ -217,7 +290,6 @@ export default function MyBetsPage({ onGames }: MyBetsPageProps) {
             )}
           </div>
         )}
-      </main>
     </div>
   );
 }

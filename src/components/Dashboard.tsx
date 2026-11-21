@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useNav, viewForOpenLink, type NavView } from '@/lib/useNav';
+import { rememberMyBetsTab } from '@/lib/myBetsTab';
 import { syncPush } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 import type { Game, GameResult } from '@/types';
@@ -15,6 +16,7 @@ import AdminHomeCard, { type AdminOpenTarget } from '@/components/AdminHomeCard'
 import AdminAlertsProvider from '@/lib/AdminAlertsProvider';
 import MoneyNotices from '@/components/MoneyNotices';
 import InstallBanner from '@/components/InstallBanner';
+import HelpButton from '@/components/HelpButton';
 import { useMoneyNotices, useNoticeText, type MoneyNotice } from '@/lib/useMoneyNotices';
 import { useToast } from '@/components/ui/toastContext';
 import type { AdminTab } from '@/components/AdminPanel';
@@ -61,9 +63,10 @@ const TAB_FOR_VIEW: Partial<Record<NavView, TabView>> = {
 export default function Dashboard() {
   const { profile } = useAuth();
   const { nav, navigate, goHome } = useNav();
-  const [adminTarget, setAdminTarget] = useState<{ tab: AdminTab; game?: Game }>({ tab: 'requests' });
+  // `opened` changes on every open, so the panel switches tab even when it is already showing.
+  const [adminTarget, setAdminTarget] = useState<{ tab: AdminTab; game?: Game; opened: number }>({ tab: 'requests', opened: 0 });
   const openAdmin = (tab: AdminTab, game?: Game) => {
-    setAdminTarget({ tab, game });
+    setAdminTarget((current) => ({ tab, game, opened: current.opened + 1 }));
     navigate({ view: 'admin', game: null });
   };
   const content = <DashboardContent nav={nav} navigate={navigate} goHome={goHome} adminTarget={adminTarget} openAdmin={openAdmin} />;
@@ -77,13 +80,15 @@ function DashboardContent({ nav, navigate, goHome, adminTarget, openAdmin }: {
   nav: ReturnType<typeof useNav>['nav'];
   navigate: ReturnType<typeof useNav>['navigate'];
   goHome: () => void;
-  adminTarget: { tab: AdminTab; game?: Game };
+  adminTarget: { tab: AdminTab; game?: Game; opened: number };
   openAdmin: (tab: AdminTab, game?: Game) => void;
 }) {
   const { user, profile, refreshProfile } = useAuth();
   const { t, language } = useT();
   const toast = useToast();
   const noticeText = useNoticeText();
+  const openAdminRef = useRef(openAdmin);
+  openAdminRef.current = openAdmin;
 
   // Keep this device's notification subscription and language current.
   useEffect(() => {
@@ -98,6 +103,10 @@ function DashboardContent({ nav, navigate, goHome, adminTarget, openAdmin }: {
       if (data?.type !== 'open-url' || typeof data.url !== 'string') return;
       const view = viewForOpenLink(data.url);
       if (!view) return;
+      if (view === 'admin') {
+        openAdminRef.current('requests');
+        return;
+      }
       setMoneyTab(null);
       navigate({ view, game: null });
       void refreshProfile();
@@ -138,7 +147,7 @@ function DashboardContent({ nav, navigate, goHome, adminTarget, openAdmin }: {
           <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> {t('common.loading')}</div>
         </div>
       }>
-        <AdminPanel onBack={() => goHome()} initialTab={adminTarget.tab} initialGame={adminTarget.game} />
+        <AdminPanel key={adminTarget.opened} onBack={() => goHome()} initialTab={adminTarget.tab} initialGame={adminTarget.game} />
       </Suspense>
     );
   }
@@ -149,9 +158,9 @@ function DashboardContent({ nav, navigate, goHome, adminTarget, openAdmin }: {
   }
 
   if (nav.view === 'mybets' && user) {
-    page = <MyBetsPage onGames={() => goHome()} />;
+    page = <MyBetsPage onGames={() => goHome()} onSports={() => goTo('sports')} />;
   } else if (nav.view === 'sports' && user) {
-    page = <SportsPage onAddFunds={() => goTo('balance')} />;
+    page = <SportsPage onAddFunds={() => goTo('balance')} onMyBets={() => { rememberMyBetsTab('sports'); goTo('mybets'); }} />;
   } else if ((nav.view === 'balance' || nav.view === 'wallet') && user) {
     page = (
       <BalancePage
@@ -392,7 +401,10 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
           {t('dashboard.rules')}
           <ChevronRight className="h-4 w-4 text-ink-muted" aria-hidden="true" />
         </button>
+        {/* Room for the floating Help button, so it never covers the last row. */}
+        {!profile?.is_admin && <div className="h-14" aria-hidden="true" />}
       </main>
+      {!profile?.is_admin && <HelpButton variant="floating" />}
     </>
   );
 }

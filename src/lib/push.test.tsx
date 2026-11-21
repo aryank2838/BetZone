@@ -19,6 +19,7 @@ describe('notification links', () => {
     expect(viewForOpenLink('/?open=money')).toBe('balance');
     expect(viewForOpenLink('/?open=bets')).toBe('mybets');
     expect(viewForOpenLink('/?open=admin')).toBeNull();
+    expect(viewForOpenLink('/?open=admin-requests')).toBe('admin');
     expect(viewForOpenLink('/')).toBeNull();
   });
 

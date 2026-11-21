@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlarmClock, Bell, BellOff, ChevronRight, Shield, TrendingUp, Volume2, VolumeX } from 'lucide-react';
+import { AlarmClock, ChevronRight, Shield, TrendingUp } from 'lucide-react';
+import AdminPushSetup from '@/components/admin/AdminPushSetup';
 import { supabase } from '@/lib/supabase';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -197,7 +198,7 @@ export default function AdminHomeCard({ statuses, onOpen }: {
       </div>
       {overviewFailed && <p className="text-sm text-amber-200/80">{t('admin.overviewFailed')}</p>}
 
-      {alerts && <AlertControls />}
+      {alerts && <AdminPushSetup />}
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Button size="lg" variant={waiting > 0 ? 'admin' : 'secondary'} onClick={() => onOpen('requests')}>
@@ -208,37 +209,5 @@ export default function AdminHomeCard({ statuses, onOpen }: {
         </Button>
       </div>
     </section>
-  );
-}
-
-function AlertControls() {
-  const { t } = useT();
-  const alerts = useAdminAlerts();
-  if (!alerts) return null;
-  const { notifications, enableNotifications, soundEnabled, setSoundEnabled } = alerts;
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {notifications === 'default' && (
-        <Button variant="secondary" icon={<Bell className="h-4 w-4" aria-hidden="true" />} onClick={() => { void enableNotifications(); }}>
-          {t('admin.notificationsOn')}
-        </Button>
-      )}
-      {notifications === 'granted' && (
-        <Badge tone="success" icon={<Bell className="h-3.5 w-3.5" aria-hidden="true" />}>{t('admin.notificationsActive')}</Badge>
-      )}
-      {notifications === 'denied' && (
-        <p className="flex items-center gap-1.5 text-xs text-ink-muted">
-          <BellOff className="h-3.5 w-3.5" aria-hidden="true" /> {t('admin.notificationsBlocked')}
-        </p>
-      )}
-      <Button
-        variant="ghost"
-        aria-pressed={soundEnabled}
-        icon={soundEnabled ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
-        onClick={() => setSoundEnabled(!soundEnabled)}
-      >
-        {soundEnabled ? t('admin.soundOn') : t('admin.soundOff')}
-      </Button>
-    </div>
   );
 }

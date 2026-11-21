@@ -10,6 +10,7 @@ import {
 } from '@/lib/adminAlerts';
 import { useVisibleInterval } from '@/lib/useVisibleInterval';
 import { useScreenshotCleanup } from '@/lib/screenshotCleanup';
+import { usePushNotifications, type PushState } from '@/lib/push';
 import { AdminAlertsContext, istToday, type AdminAlertsValue, type PendingStats } from '@/lib/adminAlertsContext';
 
 const BASE_TITLE = 'BetZone';
@@ -19,11 +20,15 @@ const BASE_TITLE = 'BetZone';
  * Realtime, and on each new request plays a chime, shows a system notification
  * when the tab is in the background, and puts the count in the tab title.
  * Polls every minute as a fallback if the live connection drops.
+ *
+ * With phone alerts (Web Push) on, the server also notifies this device about
+ * every new request while BetZone is closed, and reminds while requests wait.
  */
 export default function AdminAlertsProvider({ children, onOpenRequests }: { children: ReactNode; onOpenRequests: () => void }) {
-  const { t } = useT();
+  const { t, language } = useT();
   const { formatNumber } = useFormat();
   const toast = useToast();
+  const { state: push, busy: pushBusy, enable: enablePushRaw, disable: disablePush } = usePushNotifications(language);
   const [stats, setStats] = useState<PendingStats | null>(null);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
@@ -32,8 +37,8 @@ export default function AdminAlertsProvider({ children, onOpenRequests }: { chil
   const [soundEnabled, setSoundState] = useState(readSoundEnabled);
 
   // Event handlers below are registered once; refs give them current values.
-  const latest = useRef({ t, formatNumber, toast, soundEnabled, onOpenRequests });
-  latest.current = { t, formatNumber, toast, soundEnabled, onOpenRequests };
+  const latest = useRef({ t, formatNumber, toast, soundEnabled, onOpenRequests, push });
+  latest.current = { t, formatNumber, toast, soundEnabled, onOpenRequests, push };
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabase.rpc('admin_get_stats', { p_round_date: istToday() });
@@ -61,13 +66,17 @@ export default function AdminAlertsProvider({ children, onOpenRequests }: { chil
       }, 400);
     };
     const announce = (kind: 'deposit' | 'withdrawal', row: Record<string, unknown>) => {
-      const { t: translate, formatNumber: format, toast: toastApi, soundEnabled: sound, onOpenRequests: open } = latest.current;
+      const { t: translate, formatNumber: format, toast: toastApi, soundEnabled: sound, onOpenRequests: open, push: pushState } = latest.current;
       const amount = typeof row.amount === 'number' ? `₹${format(row.amount)}` : '';
       const title = translate(kind === 'deposit' ? 'adminAlerts.newDeposit' : 'adminAlerts.newWithdrawal');
       const body = interpolate(translate('adminAlerts.body'), { amount });
       if (sound) playAlertSound();
-      if (document.visibilityState === 'hidden') void showSystemNotification(title, body, open);
-      else toastApi.show(`${title} · ${amount}`, 'info');
+      if (document.visibilityState === 'hidden') {
+        // With phone alerts on, the server's push notification covers this.
+        if (pushState !== 'on') void showSystemNotification(title, body, open);
+      } else {
+        toastApi.show(`${title} · ${amount}`, 'info');
+      }
     };
     const onChange = (kind: 'deposit' | 'withdrawal') => (payload: { eventType: string; new: Record<string, unknown> }) => {
       if (payload.eventType === 'INSERT' && payload.new?.status === 'pending') announce(kind, payload.new);
@@ -117,9 +126,24 @@ export default function AdminAlertsProvider({ children, onOpenRequests }: { chil
     if (enabled) playAlertSound();
   }, []);
 
+  const sendTestPush = useCallback(async () => {
+    const { error } = await supabase.rpc('admin_send_test_push');
+    if (error) throw error;
+  }, []);
+
+  const enablePush = useCallback(async (): Promise<PushState> => {
+    const next = await enablePushRaw();
+    setNotifications(notificationState());
+    // The tap also unlocks audio for later alerts.
+    if (latest.current.soundEnabled) playAlertSound();
+    return next;
+  }, [enablePushRaw]);
+
   const value = useMemo<AdminAlertsValue>(() => ({
     stats, failed, waiting, version, live, notifications, enableNotifications, soundEnabled, setSoundEnabled, refresh,
-  }), [stats, failed, waiting, version, live, notifications, enableNotifications, soundEnabled, setSoundEnabled, refresh]);
+    push, pushBusy, enablePush, disablePush, sendTestPush,
+  }), [stats, failed, waiting, version, live, notifications, enableNotifications, soundEnabled, setSoundEnabled, refresh,
+    push, pushBusy, enablePush, disablePush, sendTestPush]);
 
   return <AdminAlertsContext.Provider value={value}>{children}</AdminAlertsContext.Provider>;
 }

@@ -8,7 +8,13 @@ export type PushKind =
   | 'withdrawal_rejected'
   | 'winnings'
   | 'match_starting'
-  | 'referral_bonus';
+  | 'referral_bonus'
+  // Admin alerts. For admin_waiting, amount is the number of waiting
+  // requests and reason is how many minutes the oldest has waited.
+  | 'admin_deposit'
+  | 'admin_withdrawal'
+  | 'admin_waiting'
+  | 'admin_test';
 
 export type PushLanguage = 'en' | 'hi' | 'mr';
 
@@ -56,6 +62,22 @@ const TEXT: Record<PushLanguage, Record<PushKind, Template>> = {
       body: 'A friend you invited added money. ₹{amount} bonus is in your play balance.',
       bodyWithReason: '{reason} added money. ₹{amount} bonus is in your play balance.',
     },
+    admin_deposit: {
+      title: 'New add-money request',
+      body: '₹{amount} to add. Tap to review.',
+      bodyWithReason: '{reason} wants to add ₹{amount}. Tap to review.',
+    },
+    admin_withdrawal: {
+      title: 'New withdrawal request',
+      body: '₹{amount} to withdraw. Tap to review.',
+      bodyWithReason: '{reason} wants to withdraw ₹{amount}. Tap to review.',
+    },
+    admin_waiting: {
+      title: 'Requests are waiting',
+      body: '{count} requests are waiting for you.',
+      bodyWithReason: '{count} waiting · oldest for {reason} min. Tap to review.',
+    },
+    admin_test: { title: 'Admin alerts are working ✅', body: 'You will get a notification like this for every new request.' },
   },
   hi: {
     deposit_approved: { title: 'पैसे जुड़ गए', body: '₹{amount} आपके BetZone बैलेंस में जुड़ गए हैं।' },
@@ -81,6 +103,22 @@ const TEXT: Record<PushLanguage, Record<PushKind, Template>> = {
       body: 'आपके बुलाए दोस्त ने पैसे जोड़े। ₹{amount} बोनस आपके प्ले बैलेंस में जुड़ गया है।',
       bodyWithReason: '{reason} ने पैसे जोड़े। ₹{amount} बोनस आपके प्ले बैलेंस में जुड़ गया है।',
     },
+    admin_deposit: {
+      title: 'पैसे जोड़ने का नया अनुरोध',
+      body: '₹{amount} जोड़ने का अनुरोध। देखने के लिए टैप करें।',
+      bodyWithReason: '{reason} ₹{amount} जोड़ना चाहते हैं। देखने के लिए टैप करें।',
+    },
+    admin_withdrawal: {
+      title: 'निकासी का नया अनुरोध',
+      body: '₹{amount} निकालने का अनुरोध। देखने के लिए टैप करें।',
+      bodyWithReason: '{reason} ₹{amount} निकालना चाहते हैं। देखने के लिए टैप करें।',
+    },
+    admin_waiting: {
+      title: 'अनुरोध इंतज़ार में हैं',
+      body: '{count} अनुरोध आपका इंतज़ार कर रहे हैं।',
+      bodyWithReason: '{count} अनुरोध इंतज़ार में · सबसे पुराना {reason} मिनट से। देखने के लिए टैप करें।',
+    },
+    admin_test: { title: 'एडमिन अलर्ट चालू हैं ✅', body: 'हर नए अनुरोध पर आपको ऐसा नोटिफ़िकेशन मिलेगा।' },
   },
   mr: {
     deposit_approved: { title: 'पैसे जोडले गेले', body: '₹{amount} तुमच्या BetZone बॅलन्समध्ये जोडले गेले आहेत.' },
@@ -106,6 +144,22 @@ const TEXT: Record<PushLanguage, Record<PushKind, Template>> = {
       body: 'तुम्ही बोलावलेल्या मित्राने पैसे जोडले. ₹{amount} बोनस तुमच्या प्ले बॅलन्समध्ये जोडला आहे.',
       bodyWithReason: '{reason} ने पैसे जोडले. ₹{amount} बोनस तुमच्या प्ले बॅलन्समध्ये जोडला आहे.',
     },
+    admin_deposit: {
+      title: 'पैसे जोडण्याची नवी विनंती',
+      body: '₹{amount} जोडण्याची विनंती. पाहण्यासाठी टॅप करा.',
+      bodyWithReason: '{reason} यांना ₹{amount} जोडायचे आहेत. पाहण्यासाठी टॅप करा.',
+    },
+    admin_withdrawal: {
+      title: 'पैसे काढण्याची नवी विनंती',
+      body: '₹{amount} काढण्याची विनंती. पाहण्यासाठी टॅप करा.',
+      bodyWithReason: '{reason} यांना ₹{amount} काढायचे आहेत. पाहण्यासाठी टॅप करा.',
+    },
+    admin_waiting: {
+      title: 'विनंत्या वाट पाहत आहेत',
+      body: '{count} विनंत्या तुमची वाट पाहत आहेत.',
+      bodyWithReason: '{count} विनंत्या प्रलंबित · सर्वात जुनी {reason} मिनिटांपासून. पाहण्यासाठी टॅप करा.',
+    },
+    admin_test: { title: 'अ‍ॅडमिन अलर्ट सुरू आहेत ✅', body: 'प्रत्येक नव्या विनंतीसाठी तुम्हाला असे नोटिफिकेशन येईल.' },
   },
 };
 
@@ -117,7 +171,20 @@ const URLS: Record<PushKind, string> = {
   winnings: '/?open=bets',
   match_starting: '/?open=sports',
   referral_bonus: '/?open=money',
+  admin_deposit: '/?open=admin-requests',
+  admin_withdrawal: '/?open=admin-requests',
+  admin_waiting: '/?open=admin-requests',
+  admin_test: '/?open=admin-requests',
 };
+
+/** How long a push service keeps trying to deliver, by kind. */
+export function ttlSeconds(kind: PushKind): number {
+  // A match reminder is useless after kick-off; a "still waiting" reminder is
+  // replaced by the next one 30 minutes later.
+  if (kind === 'match_starting' || kind === 'admin_waiting' || kind === 'admin_test') return 30 * 60;
+  if (kind === 'winnings' || kind === 'admin_deposit' || kind === 'admin_withdrawal') return 6 * 60 * 60;
+  return 24 * 60 * 60;
+}
 
 export function formatRupees(amount: number): string {
   return Math.round(amount).toLocaleString('en-IN');
@@ -134,11 +201,15 @@ export function normalizeLanguage(value: string | null | undefined): PushLanguag
 export function buildMessage(kind: PushKind, amount: number, reason: string | null, language: PushLanguage): PushMessage {
   const template = TEXT[language][kind];
   const trimmedReason = reason?.trim().slice(0, 120) ?? '';
+  const values = { amount: formatRupees(amount), count: String(Math.max(0, Math.round(amount))), reason: trimmedReason };
   const body = trimmedReason && template.bodyWithReason
-    ? fill(template.bodyWithReason, { amount: formatRupees(amount), reason: trimmedReason })
-    : fill(template.body, { amount: formatRupees(amount) });
-  // One reminder per match, so two matches do not replace each other.
-  const tag = kind === 'match_starting' && trimmedReason ? `${kind}:${trimmedReason}` : kind;
+    ? fill(template.bodyWithReason, values)
+    : fill(template.body, values);
+  // One reminder per match, and one notification per new request, so they do
+  // not replace each other. "Still waiting" reminders replace the last one.
+  let tag: string = kind;
+  if (kind === 'match_starting' && trimmedReason) tag = `${kind}:${trimmedReason}`;
+  if (kind === 'admin_deposit' || kind === 'admin_withdrawal') tag = `${kind}:${trimmedReason}:${amount}`;
   return { title: template.title, body, url: URLS[kind], tag };
 }
 

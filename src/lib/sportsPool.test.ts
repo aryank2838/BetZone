@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimatePayout, isBettable, playerMoney, poolForEstimate, popularIds, sortMatches, subjectTeam, thinSide, yesShare, type SportEvent } from './sportsPool';
+import { competitionsOf, estimatePayout, matchesSearch, sportBetOutcome, isBettable, playerMoney, poolForEstimate, popularIds, sortMatches, subjectTeam, thinSide, yesShare, type SportEvent } from './sportsPool';
 
 describe('house money', () => {
   it('counts the coming house money on a match that has not had it yet', () => {
@@ -126,5 +126,44 @@ describe('match order', () => {
       match('400-from-players', { yes_total: 400, no_total: 200, house_no: 200, house_seeded: true }),
     ];
     expect([...popularIds(events, now)]).toEqual(['exactly-500']);
+  });
+});
+
+describe('sportBetOutcome', () => {
+  const event = { starts_at: '2026-11-21T18:00:00Z' } as Parameters<typeof sportBetOutcome>[0]['event'];
+  const now = Date.parse('2026-11-21T12:00:00Z');
+
+  it('works out profit for settled bets', () => {
+    expect(sportBetOutcome({ status: 'won', amount: 100, payout: 180, event }, now)).toEqual({ phase: 'won', profit: 80 });
+    expect(sportBetOutcome({ status: 'lost', amount: 100, payout: 0, event }, now)).toEqual({ phase: 'lost', profit: -100 });
+    expect(sportBetOutcome({ status: 'refunded', amount: 100, payout: 100, event }, now)).toEqual({ phase: 'refunded', profit: 0 });
+  });
+
+  it('tells upcoming matches from ones already under way', () => {
+    expect(sportBetOutcome({ status: 'open', amount: 100, payout: 0, event }, now).phase).toBe('upcoming');
+    expect(sportBetOutcome({ status: 'open', amount: 100, payout: 0, event }, Date.parse('2026-11-21T19:00:00Z')).phase).toBe('started');
+  });
+});
+
+describe('match search', () => {
+  const match = { home_team: 'Atlético Madrid', away_team: 'Real Madrid', competition_name: 'La Liga' };
+
+  it('matches team and league names, ignoring case and accents', () => {
+    expect(matchesSearch(match, 'atletico')).toBe(true);
+    expect(matchesSearch(match, 'REAL')).toBe(true);
+    expect(matchesSearch(match, 'liga')).toBe(true);
+    expect(matchesSearch(match, '   ')).toBe(true);
+    expect(matchesSearch(match, 'barcelona')).toBe(false);
+  });
+
+  it('needs every word to match somewhere', () => {
+    expect(matchesSearch({ home_team: 'India', away_team: 'Australia', competition_name: 'ODI' }, 'india aus')).toBe(true);
+    expect(matchesSearch({ home_team: 'India', away_team: 'England', competition_name: 'ODI' }, 'india aus')).toBe(false);
+  });
+
+  it('lists leagues by how many matches they have', () => {
+    expect(competitionsOf([
+      { competition_name: 'La Liga' }, { competition_name: 'Premier League' }, { competition_name: 'Premier League' },
+    ])).toEqual([{ name: 'Premier League', count: 2 }, { name: 'La Liga', count: 1 }]);
   });
 });

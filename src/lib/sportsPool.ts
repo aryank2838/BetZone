@@ -1,3 +1,5 @@
+import type { TranslationKey } from '@/i18n/context';
+
 export type SportSide = 'yes' | 'no';
 export type Sport = 'football' | 'cricket';
 
@@ -156,4 +158,71 @@ export function popularIds(events: SportEvent[], nowMs: number): Set<string> {
 /** Kick-off is in the future and the match is still open. */
 export function isBettable(event: Pick<SportEvent, 'state' | 'starts_at' | 'provider_status'>, nowMs: number) {
   return event.state === 'open' && event.provider_status === 'scheduled' && Date.parse(event.starts_at) > nowMs;
+}
+
+/** Translation key for why a match was refunded (sport_events.void_reason). */
+const REFUND_REASONS: Record<string, TranslationKey> = {
+  one_sided: 'sports.reason.oneSided',
+  cancelled_or_postponed: 'sports.reason.cancelled',
+  start_moved_earlier: 'sports.reason.startMoved',
+  no_result: 'sports.reason.noResult',
+};
+
+export function refundReasonKey(reason: string | null): TranslationKey {
+  if (reason && REFUND_REASONS[reason]) return REFUND_REASONS[reason];
+  return 'sports.reason.support';
+}
+
+export interface MySportBetTotals {
+  bet_count: number;
+  open_count: number;
+  open_stake: number;
+  won_count: number;
+  /** Stakes of bets that won or lost (refunds left out). */
+  settled_stake: number;
+  /** Paid back on winning bets, stake included. */
+  returned: number;
+}
+
+export type SportBetPhase = 'upcoming' | 'started' | 'won' | 'lost' | 'refunded';
+
+/**
+ * Where a player's bet stands, and what it made: profit is the payout minus
+ * the stake for a win, minus the stake for a loss, and 0 otherwise.
+ */
+export function sportBetOutcome(bet: Pick<MySportBet, 'status' | 'amount' | 'payout' | 'event'>, nowMs: number): {
+  phase: SportBetPhase;
+  profit: number;
+} {
+  if (bet.status === 'won') return { phase: 'won', profit: bet.payout - bet.amount };
+  if (bet.status === 'lost') return { phase: 'lost', profit: -bet.amount };
+  if (bet.status === 'refunded') return { phase: 'refunded', profit: 0 };
+  return { phase: Date.parse(bet.event.starts_at) > nowMs ? 'upcoming' : 'started', profit: 0 };
+}
+
+/** Lower-case, accents removed, so "atlético" matches "atletico". */
+function searchable(text: string): string {
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/**
+ * Does the match fit what the player typed? Every word must appear in a team
+ * or league name, so "india aus" finds India vs Australia.
+ */
+export function matchesSearch(
+  event: Pick<SportEvent, 'home_team' | 'away_team' | 'competition_name'>,
+  query: string,
+): boolean {
+  const words = searchable(query).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const haystack = searchable(`${event.home_team} ${event.away_team} ${event.competition_name}`);
+  return words.every((word) => haystack.includes(word));
+}
+
+/** Leagues in the list with how many matches each has, biggest first. */
+export function competitionsOf(events: Pick<SportEvent, 'competition_name'>[]): Array<{ name: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const event of events) counts.set(event.competition_name, (counts.get(event.competition_name) ?? 0) + 1);
+  return [...counts].map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
