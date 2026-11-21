@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Bell, BellOff, BellRing, Send, Smartphone, Volume2, VolumeX } from 'lucide-react';
+import { Bell, BellOff, BellRing, ChevronDown, ChevronUp, Loader2, Send, Smartphone, Volume2, VolumeX } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/toastContext';
 import { useAdminAlerts } from '@/lib/adminAlertsContext';
 import { friendlyError } from '@/lib/errors';
@@ -16,6 +15,7 @@ export default function AdminPushSetup({ variant = 'card' }: { variant?: 'card' 
   const toast = useToast();
   const alerts = useAdminAlerts();
   const [testing, setTesting] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   if (!alerts) return null;
   const { push, pushBusy, enablePush, disablePush, sendTestPush, notifications, enableNotifications, soundEnabled, setSoundEnabled } = alerts;
 
@@ -72,67 +72,85 @@ export default function AdminPushSetup({ variant = 'card' }: { variant?: 'card' 
   }
 
   const on = push === 'on';
+  const iconButton = 'grid h-9 w-9 shrink-0 place-items-center rounded-full border border-surface-strong text-ink-soft hover:bg-surface-raised disabled:opacity-50';
+  const soundToggle = (
+    <button
+      type="button"
+      aria-pressed={soundEnabled}
+      aria-label={soundEnabled ? t('admin.soundOn') : t('admin.soundOff')}
+      title={soundEnabled ? t('admin.soundOn') : t('admin.soundOff')}
+      onClick={() => setSoundEnabled(!soundEnabled)}
+      className={iconButton}
+    >
+      {soundEnabled ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
+    </button>
+  );
+  const note = push === 'blocked' ? t('admin.pushBlocked')
+    : push === 'ios-install' ? t('push.iosInstall')
+      : push === 'unsupported' ? t('admin.pushTabOnly')
+        : null;
+
+  // One compact row; details and "Turn off" sit behind the chevron.
   return (
-    <div className="space-y-3 rounded-control border border-surface-border bg-surface-page/50 p-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="flex items-center gap-2 text-sm font-semibold text-ink-strong">
-          <Smartphone className="h-4 w-4 text-amber-400" aria-hidden="true" />
+    <div className="rounded-control border border-surface-border bg-surface-page/50">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <Smartphone className={`h-4 w-4 shrink-0 ${on ? 'text-brand-400' : 'text-amber-400'}`} aria-hidden="true" />
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-strong">
           {t('admin.pushTitle')}
+          {push !== 'loading' && (
+            <span className={`ml-1.5 font-medium ${on ? 'text-brand-300' : 'text-amber-300'}`}>
+              · {on ? t('admin.pushOn') : t('admin.pushOff')}
+            </span>
+          )}
         </p>
-        {push !== 'loading' && (
-          <Badge tone={on ? 'success' : 'warning'} icon={on ? <BellRing className="h-3.5 w-3.5" aria-hidden="true" /> : <BellOff className="h-3.5 w-3.5" aria-hidden="true" />}>
-            {on ? t('admin.pushOn') : t('admin.pushOff')}
-          </Badge>
+
+        {on && (
+          <button
+            type="button"
+            onClick={() => void sendTest()}
+            disabled={testing}
+            aria-label={t('admin.pushTest')}
+            title={t('admin.pushTest')}
+            className={iconButton}
+          >
+            {testing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
+          </button>
         )}
+        {push === 'off' && (
+          <Button variant="admin" loading={pushBusy} disabled={pushBusy} icon={<Bell className="h-4 w-4" aria-hidden="true" />} onClick={() => void turnOn()}>
+            {t('admin.pushTurnOnShort')}
+          </Button>
+        )}
+        {push === 'unsupported' && notifications === 'default' && (
+          <Button variant="secondary" icon={<Bell className="h-4 w-4" aria-hidden="true" />} onClick={() => { void enableNotifications(); }}>
+            {t('admin.pushTurnOnShort')}
+          </Button>
+        )}
+        {soundToggle}
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          aria-label={t('admin.pushDetails')}
+          className="grid h-9 w-7 shrink-0 place-items-center text-ink-muted hover:text-ink-soft"
+        >
+          {expanded ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
+        </button>
       </div>
 
-      {on && (
-        <>
-          <p className="text-sm text-ink-muted">{t('admin.pushOnBody')}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" loading={testing} disabled={testing} icon={<Send className="h-4 w-4" aria-hidden="true" />} onClick={() => void sendTest()}>
-              {t('admin.pushTest')}
-            </Button>
-            <Button variant="ghost" loading={pushBusy} disabled={pushBusy} onClick={() => void turnOff()}>
+      {note && !expanded && <p className="truncate px-3 pb-2 text-xs text-amber-200/90">{note}</p>}
+
+      {expanded && (
+        <div className="space-y-2 border-t border-surface-border px-3 py-2.5">
+          <p className="text-xs text-ink-muted">{on ? t('admin.pushOnBody') : t('admin.pushOffBody')}</p>
+          {note && <p className="text-xs text-amber-200">{note}</p>}
+          {on && (
+            <Button variant="ghost" loading={pushBusy} disabled={pushBusy} icon={<BellOff className="h-4 w-4" aria-hidden="true" />} onClick={() => void turnOff()}>
               {t('push.turnOff')}
             </Button>
-          </div>
-        </>
-      )}
-
-      {push === 'off' && (
-        <>
-          <p className="text-sm text-ink-muted">{t('admin.pushOffBody')}</p>
-          <Button variant="admin" fullWidth loading={pushBusy} disabled={pushBusy} icon={<Bell className="h-4 w-4" aria-hidden="true" />} onClick={() => void turnOn()}>
-            {t('admin.pushTurnOn')}
-          </Button>
-        </>
-      )}
-
-      {push === 'blocked' && <p className="text-sm text-amber-200">{t('admin.pushBlocked')}</p>}
-      {push === 'ios-install' && <p className="text-sm text-amber-200">{t('push.iosInstall')}</p>}
-      {push === 'unsupported' && (
-        <div className="space-y-2">
-          <p className="text-sm text-amber-200">{t('admin.pushTabOnly')}</p>
-          {notifications === 'default' && (
-            <Button variant="secondary" icon={<Bell className="h-4 w-4" aria-hidden="true" />} onClick={() => { void enableNotifications(); }}>
-              {t('admin.notificationsOn')}
-            </Button>
-          )}
-          {notifications === 'granted' && (
-            <Badge tone="success" icon={<Bell className="h-3.5 w-3.5" aria-hidden="true" />}>{t('admin.notificationsActive')}</Badge>
           )}
         </div>
       )}
-
-      <Button
-        variant="ghost"
-        aria-pressed={soundEnabled}
-        icon={soundEnabled ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
-        onClick={() => setSoundEnabled(!soundEnabled)}
-      >
-        {soundEnabled ? t('admin.soundOn') : t('admin.soundOff')}
-      </Button>
     </div>
   );
 }

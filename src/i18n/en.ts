@@ -130,6 +130,8 @@ const en = {
   'admin.pushOnBody': "This device gets an alert for every new request, even when BetZone is closed, plus a reminder every 30 minutes while any request waits over 10 minutes.",
   'admin.pushOffBody': "Get a notification for every new add-money or withdrawal request, even when BetZone is closed.",
   'admin.pushTurnOn': "Turn on phone alerts",
+  'admin.pushTurnOnShort': "Turn on",
+  'admin.pushDetails': "Phone alert details",
   'admin.pushTest': "Send a test",
   'admin.pushTestSent': "Test sent. It should arrive within a minute.",
   'admin.pushEnabled': "Phone alerts are on. A test notification is on its way.",

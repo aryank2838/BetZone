@@ -136,6 +136,8 @@ const hi: Record<keyof typeof en, string> = {
   'admin.pushOnBody': 'हर नए अनुरोध पर इस फ़ोन पर अलर्ट आएगा, BetZone बंद होने पर भी। कोई अनुरोध 10 मिनट से ज़्यादा रुका रहे तो हर 30 मिनट में याद दिलाया जाएगा।',
   'admin.pushOffBody': 'पैसे जोड़ने या निकालने के हर नए अनुरोध पर नोटिफ़िकेशन पाएँ, BetZone बंद होने पर भी।',
   'admin.pushTurnOn': 'फ़ोन अलर्ट चालू करें',
+  'admin.pushTurnOnShort': 'चालू करें',
+  'admin.pushDetails': 'फ़ोन अलर्ट की जानकारी',
   'admin.pushTest': 'टेस्ट भेजें',
   'admin.pushTestSent': 'टेस्ट भेज दिया। एक मिनट में आ जाना चाहिए।',
   'admin.pushEnabled': 'फ़ोन अलर्ट चालू हो गए। एक टेस्ट नोटिफ़िकेशन आ रहा है।',
