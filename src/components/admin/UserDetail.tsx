@@ -6,6 +6,7 @@ import { useFormat } from '@/i18n/useFormat';
 import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
 import { BET_TYPES, type BetType } from '@/types';
+import { subjectTeam, type MySportBet } from '@/lib/sportsPool';
 import { LEDGER_REASON_LABELS, ledgerMetadataSummary, picksSummary } from './userDetailFormat';
 import ConfirmDialog from './ConfirmDialog';
 import UserReferrals from './UserReferrals';
@@ -49,7 +50,13 @@ interface UserDetailData {
   deposits: DepositRow[];
   withdrawals: WithdrawalRow[];
   tickets: TicketRow[];
+  /** Missing until the database update that adds it is applied. */
+  sport_bets?: MySportBet[];
 }
+
+const SPORT_STATUS_TONE: Record<MySportBet['status'], string> = {
+  open: 'text-amber-300', won: 'text-emerald-400', lost: 'text-rose-400', refunded: 'text-ink-muted',
+};
 
 const when = (value: string | null) => (value ? formatDate(value, { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 const statusTone = (status: string) => status === 'approved' || status === 'closed' ? 'text-emerald-400'
@@ -103,6 +110,15 @@ export default function UserDetail({ userId, onBack }: { userId: string; onBack:
     return () => { active = false; };
   }, [userId]);
 
+  const sportBets = detail?.sport_bets ?? [];
+  const sportTotals = sportBets.reduce((totals, bet) => {
+    totals.staked += bet.amount;
+    if (bet.status === 'open') { totals.open += 1; totals.openStake += bet.amount; }
+    if (bet.status === 'won') { totals.returned += bet.payout; totals.net += bet.payout - bet.amount; }
+    if (bet.status === 'lost') totals.net -= bet.amount;
+    return totals;
+  }, { staked: 0, returned: 0, net: 0, open: 0, openStake: 0 });
+
   return (
     <section className="space-y-5 animate-fade-in">
       <button type="button" onClick={onBack} className="tap-target flex items-center gap-2 text-sm text-ink-muted hover:text-ink-strong"><ArrowLeft className="h-4 w-4" /> Back to users</button>
@@ -154,6 +170,40 @@ export default function UserDetail({ userId, onBack }: { userId: string; onBack:
               left={<><span className="font-medium text-slate-200">{row.game} · {row.round_date} · {BET_TYPES[row.bet_type as BetType]?.label ?? row.bet_type}</span><span className="block break-all text-ink-muted">Picks: {picksSummary(row.selections) || '—'}</span></>}
               right={<><span>Stake {formatNumber(row.total_points)}</span><span className="block text-ink-muted">{when(row.created_at)}</span></>} />
           )) : <Empty text="No bets." />}
+        </Section>
+
+        <Section title="Sports bets (up to 50)">
+          {sportBets.length > 0 && (
+            <p className="pb-2 text-xs text-ink-muted">
+              {sportTotals.open > 0 && <><span className="text-amber-300">{sportTotals.open} waiting ({formatNumber(sportTotals.openStake)})</span> · </>}
+              Staked {formatNumber(sportTotals.staked)} · Won back {formatNumber(sportTotals.returned)} ·{' '}
+              <span className={sportTotals.net >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                Player net {sportTotals.net >= 0 ? '+' : '−'}{formatNumber(Math.abs(sportTotals.net))}
+              </span>
+            </p>
+          )}
+          {sportBets.length ? sportBets.map((row) => (
+            <Row key={row.id}
+              left={<>
+                <span className="font-medium text-slate-200">{row.event.home_team} vs {row.event.away_team}</span>
+                <span className="block text-ink-muted">
+                  {row.event.competition_name} · {when(row.event.starts_at)}
+                  {row.event.home_score != null && row.event.away_score != null && ` · ${row.event.home_score}–${row.event.away_score}`}
+                </span>
+                <span className="block text-ink-muted">
+                  Will {subjectTeam(row.event)} win? <span className={row.side === 'yes' ? 'text-emerald-300' : 'text-rose-300'}>{row.side === 'yes' ? 'Yes' : 'No'}</span>
+                </span>
+              </>}
+              right={<>
+                <span>Stake {formatNumber(row.amount)}</span>
+                <span className={`block ${SPORT_STATUS_TONE[row.status]}`}>
+                  {row.status === 'won' ? `Won ${formatNumber(row.payout)}`
+                    : row.status === 'refunded' ? `Refunded ${formatNumber(row.payout)}`
+                      : row.status === 'lost' ? 'Lost' : 'Waiting'}
+                </span>
+                <span className="block text-ink-muted">{when(row.created_at)}</span>
+              </>} />
+          )) : <Empty text="No sports bets." />}
         </Section>
 
         <Section title="Deposits (up to 50)">
