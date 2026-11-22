@@ -6,7 +6,7 @@ import { useFormat } from '@/i18n/useFormat';
 import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
 import { BET_TYPES, type BetType } from '@/types';
-import { subjectTeam, type MySportBet } from '@/lib/sportsPool';
+import { adminSideName, subjectTeam, type MySportBet } from '@/lib/sportsPool';
 import { LEDGER_REASON_LABELS, ledgerMetadataSummary, picksSummary } from './userDetailFormat';
 import ConfirmDialog from './ConfirmDialog';
 import UserReferrals from './UserReferrals';
@@ -191,7 +191,10 @@ export default function UserDetail({ userId, onBack }: { userId: string; onBack:
                   {row.event.home_score != null && row.event.away_score != null && ` · ${row.event.home_score}–${row.event.away_score}`}
                 </span>
                 <span className="block text-ink-muted">
-                  Will {subjectTeam(row.event)} win? <span className={row.side === 'yes' ? 'text-emerald-300' : 'text-rose-300'}>{row.side === 'yes' ? 'Yes' : 'No'}</span>
+                  {row.event.has_draw ? 'Picked' : `Will ${subjectTeam(row.event)} win?`}{' '}
+                  <span className={row.side === 'draw' ? 'text-amber-300' : row.event.has_draw ? 'text-sky-300' : row.side === 'yes' ? 'text-emerald-300' : 'text-rose-300'}>
+                    {adminSideName(row.event, row.side)}
+                  </span>
                 </span>
               </>}
               right={<>

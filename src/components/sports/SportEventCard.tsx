@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { CheckCircle2, RotateCcw, ShieldCheck, TrendingUp, XCircle } from 'lucide-react';
+import { CheckCircle2, Equal, RotateCcw, ShieldCheck, TrendingUp, XCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { formatCountdown } from '@/lib/countdown';
 import {
-  estimatePayout, isBettable, poolForEstimate, refundReasonKey, subjectTeam, thinSide, yesShare,
-  type SportEvent, type SportSide,
+  estimatePayout, isBettable, myStake, poolFor, poolForEstimate, poolShares, poolsOf, refundReasonKey,
+  questionText, resultText, sideName, sidesOf, subjectTeam, thinSide,
+  type Pools, type SportEvent, type SportSide,
 } from '@/lib/sportsPool';
 import { teamColor, teamInitials } from '@/lib/sportsLook';
 import Alert from '@/components/ui/Alert';
@@ -22,6 +23,24 @@ const QUICK_AMOUNTS = [50, 100, 500, 1000];
 const SIDE = {
   yes: { focus: 'focus:border-emerald-400', text: 'text-emerald-300', strong: 'text-emerald-200', border: 'border-emerald-500/60', bg: 'bg-emerald-500/10', ring: 'ring-emerald-400', bar: 'bg-emerald-500', button: '!bg-emerald-500 !text-slate-950 hover:!bg-emerald-400' },
   no: { focus: 'focus:border-rose-400', text: 'text-rose-300', strong: 'text-rose-200', border: 'border-rose-500/60', bg: 'bg-rose-500/10', ring: 'ring-rose-400', bar: 'bg-rose-500', button: '!bg-rose-500 !text-white hover:!bg-rose-400' },
+  draw: { focus: 'focus:border-amber-400', text: 'text-amber-300', strong: 'text-amber-200', border: 'border-amber-500/60', bg: 'bg-amber-500/10', ring: 'ring-amber-400', bar: 'bg-amber-500', button: '!bg-amber-500 !text-slate-950 hover:!bg-amber-400' },
+  // Draw matches: the two teams get neutral colours, not "right / wrong" green and red.
+  home: { focus: 'focus:border-sky-400', text: 'text-sky-300', strong: 'text-sky-100', border: 'border-sky-500/60', bg: 'bg-sky-500/10', ring: 'ring-sky-400', bar: 'bg-sky-500', button: '!bg-sky-500 !text-slate-950 hover:!bg-sky-400' },
+  away: { focus: 'focus:border-violet-400', text: 'text-violet-300', strong: 'text-violet-100', border: 'border-violet-500/60', bg: 'bg-violet-500/10', ring: 'ring-violet-400', bar: 'bg-violet-500', button: '!bg-violet-500 !text-white hover:!bg-violet-400' },
+} as const;
+
+/** Colours for a side: Yes/No/Draw, or home/away team on a Draw match. */
+function lookOf(event: Pick<SportEvent, 'has_draw' | 'subject_side'>, side: SportSide) {
+  if (!event.has_draw || side === 'draw') return SIDE[side];
+  const isHome = (side === 'yes') === (event.subject_side !== 'away');
+  return isHome ? SIDE.home : SIDE.away;
+}
+
+const RESULT_ICON = { yes: CheckCircle2, no: XCircle, draw: Equal } as const;
+const RESULT_BOX = {
+  yes: 'bg-emerald-500/15 text-emerald-200',
+  no: 'bg-rose-500/15 text-rose-200',
+  draw: 'bg-amber-500/15 text-amber-200',
 } as const;
 
 function TeamBadge({ name }: { name: string }) {
@@ -91,25 +110,35 @@ export default function SportEventCard({ event, nowMs, popular = false, minBet, 
   const [side, setSide] = useState<SportSide | null>(null);
   const team = subjectTeam(event);
   const open = isBettable(event, nowMs);
+  const sides = sidesOf(event);
   const pool = poolForEstimate(event, houseSeed);
-  const thinCandidate = open ? thinSide(pool.yesTotal, pool.noTotal) : null;
-  const thinAmount = thinCandidate === 'yes' ? pool.yesTotal : pool.noTotal;
+  const thinCandidate = open ? thinSide(pool.yesTotal, pool.noTotal, event.has_draw ? pool.drawTotal : undefined) : null;
+  const thinAmount = thinCandidate ? poolFor(pool, thinCandidate) : 0;
   // An empty side already says "Be the first to bet" on its button.
   const thin = thinAmount > 0 ? thinCandidate : null;
   const thinPayout = thin
     ? estimatePayout({ stake: 100, side: thin, ...pool, feePercent: event.fee_percent }).payout
     : 0;
   const houseEach = event.house_seeded ? event.house_yes : open ? houseSeed : 0;
-  const share = yesShare(event.yes_total, event.no_total);
+  const pools = poolsOf(event);
+  const shares = poolShares(pools, sides);
   const startsMs = Date.parse(event.starts_at);
-  const total = event.yes_total + event.no_total;
+  const total = sides.reduce((sum, s) => sum + poolFor(pools, s), 0);
   const hasScore = event.home_score != null && event.away_score != null;
   const finished = event.state === 'settled' || event.state === 'void';
   const sportIcon = event.sport === 'cricket' ? '🏏' : '⚽';
-  const sideLabel = (s: SportSide) => t(s === 'yes' ? 'sports.yes' : 'sports.no');
+  const sideLabel = (s: SportSide) => sideName(event, s, t);
+  const look = (s: SportSide) => lookOf(event, s);
+  const teamSides = Boolean(event.has_draw);
+  const outcome = event.state === 'settled' ? event.outcome : null;
+  // On a Draw match the winning team's colour, not "Yes" green.
+  const resultBox = outcome && teamSides && outcome !== 'draw'
+    ? `${look(outcome).bg} ${look(outcome).strong}`
+    : outcome ? RESULT_BOX[outcome] : '';
+  const ResultIcon = outcome ? (teamSides && outcome !== 'draw' ? CheckCircle2 : RESULT_ICON[outcome]) : null;
 
-  const myBets = (['yes', 'no'] as SportSide[])
-    .map((s) => ({ side: s, amount: s === 'yes' ? event.my_yes : event.my_no }))
+  const myBets = sides
+    .map((s) => ({ side: s, amount: myStake(event, s) }))
     .filter((bet) => bet.amount > 0);
 
   return (
@@ -137,7 +166,7 @@ export default function SportEventCard({ event, nowMs, popular = false, minBet, 
         {[event.home_team, event.away_team].map((name, index) => (
           <div key={name + index} className={`min-w-0 text-center ${index === 1 ? 'order-3' : ''}`}>
             <TeamBadge name={name} />
-            <p className={`mt-1.5 line-clamp-2 text-sm font-semibold leading-tight ${name === team ? 'text-ink-strong' : 'text-ink-soft'}`}>{name}</p>
+            <p className={`mt-1.5 line-clamp-2 text-sm font-semibold leading-tight ${teamSides || name === team ? 'text-ink-strong' : 'text-ink-soft'}`}>{name}</p>
           </div>
         ))}
         <div className="order-2 min-w-[76px] text-center">
@@ -155,16 +184,12 @@ export default function SportEventCard({ event, nowMs, popular = false, minBet, 
       </div>
 
       <div className="space-y-3 border-t border-surface-border px-4 pb-4 pt-3">
-        <p className="text-center text-base font-bold text-ink-strong">{interpolate(t('sports.question'), { team })}</p>
+        <p className="text-center text-base font-bold text-ink-strong">{questionText(event, t)}</p>
 
-        {event.state === 'settled' && (
-          <div className={`flex items-center justify-center gap-2 rounded-control px-3 py-2 text-sm font-semibold ${
-            event.outcome === 'yes' ? 'bg-emerald-500/15 text-emerald-200' : 'bg-rose-500/15 text-rose-200'
-          }`}>
-            {event.outcome === 'yes'
-              ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-              : <XCircle className="h-4 w-4" aria-hidden="true" />}
-            {interpolate(t(event.outcome === 'yes' ? 'sports.resultYes' : 'sports.resultNo'), { team })}
+        {outcome && ResultIcon && (
+          <div className={`flex items-center justify-center gap-2 rounded-control px-3 py-2 text-sm font-semibold ${resultBox}`}>
+            <ResultIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {resultText(event, t)}
           </div>
         )}
         {event.state === 'void' && (
@@ -175,29 +200,40 @@ export default function SportEventCard({ event, nowMs, popular = false, minBet, 
         )}
 
         {open ? (
-          <div className="grid grid-cols-2 gap-2">
-            {(['yes', 'no'] as SportSide[]).map((s) => {
-              const look = SIDE[s];
+          <div className={`grid gap-2 ${sides.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {sides.map((s) => {
+              const sideLook = look(s);
               const est = estimatePayout({ stake: 100, side: s, ...pool, feePercent: event.fee_percent });
-              const pct = s === 'yes' ? share : 100 - share;
+              const pct = shares[s];
               const selected = side === s;
+              const payLine = est.refund ? t('sports.beFirst') : interpolate(t('sports.per100'), { amount: formatNumber(est.payout) });
               return (
                 <button
                   key={s}
                   type="button"
                   aria-pressed={selected}
                   onClick={() => setSide(selected ? null : s)}
-                  className={`rounded-control border-2 px-3 py-2.5 text-left transition-colors ${look.border} ${look.bg} ${
-                    selected ? `ring-2 ring-offset-2 ring-offset-surface ${look.ring}` : 'hover:brightness-125'
-                  }`}
+                  className={`rounded-control border-2 text-left transition-colors ${sideLook.border} ${sideLook.bg} ${
+                    teamSides ? 'flex min-h-[76px] flex-col justify-between px-2.5 py-2' : 'px-3 py-2.5'
+                  } ${selected ? `ring-2 ring-offset-2 ring-offset-surface ${sideLook.ring}` : 'hover:brightness-125'}`}
                 >
-                  <span className="flex items-baseline justify-between gap-1">
-                    <span className={`text-base font-extrabold uppercase ${look.strong}`}>{sideLabel(s)}</span>
-                    {total > 0 && <span className={`text-xs font-semibold tabular-nums ${look.text}`}>{pct}%</span>}
-                  </span>
-                  <span className="mt-0.5 block text-xs tabular-nums text-ink-soft">
-                    {est.refund ? t('sports.beFirst') : interpolate(t('sports.per100'), { amount: formatNumber(est.payout) })}
-                  </span>
+                  {teamSides ? (
+                    <>
+                      <span className={`line-clamp-2 break-words text-sm font-bold leading-tight ${sideLook.strong}`}>{sideLabel(s)}</span>
+                      <span className="mt-1 block text-[11px] leading-snug tabular-nums text-ink-soft">
+                        {total > 0 && <span className={`font-semibold ${sideLook.text}`}>{pct}% · </span>}
+                        {payLine}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex flex-wrap items-baseline justify-between gap-x-1">
+                        <span className={`text-base font-extrabold uppercase ${sideLook.strong}`}>{sideLabel(s)}</span>
+                        {total > 0 && <span className={`text-xs font-semibold tabular-nums ${sideLook.text}`}>{pct}%</span>}
+                      </span>
+                      <span className="mt-0.5 block text-xs tabular-nums text-ink-soft">{payLine}</span>
+                    </>
+                  )}
                 </button>
               );
             })}
@@ -208,7 +244,7 @@ export default function SportEventCard({ event, nowMs, popular = false, minBet, 
           <button
             type="button"
             onClick={() => setSide(thin)}
-            className={`flex w-full items-center gap-2 rounded-control border px-3 py-2 text-left text-xs font-semibold ${SIDE[thin].border} ${SIDE[thin].bg} ${SIDE[thin].strong} hover:brightness-125`}
+            className={`flex w-full items-center gap-2 rounded-control border px-3 py-2 text-left text-xs font-semibold ${look(thin).border} ${look(thin).bg} ${look(thin).strong} hover:brightness-125`}
           >
             <TrendingUp className="h-4 w-4 shrink-0" aria-hidden="true" />
             {interpolate(t('sports.thinNudge'), {
@@ -221,17 +257,33 @@ export default function SportEventCard({ event, nowMs, popular = false, minBet, 
 
         <div>
           <div className="flex h-2 overflow-hidden rounded-full bg-surface-raised" aria-hidden="true">
-            {total > 0 && <div className={SIDE.yes.bar} style={{ width: `${share}%` }} />}
-            {total > 0 && <div className={SIDE.no.bar} style={{ width: `${100 - share}%` }} />}
+            {total > 0 && sides.map((s) => <div key={s} className={look(s).bar} style={{ width: `${shares[s]}%` }} />)}
           </div>
-          {total > 0 ? (
+          {total > 0 && event.has_draw ? (
+            <>
+              <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11px] tabular-nums text-ink-muted">
+                {sides.map((s, index) => (
+                  <span
+                    key={s}
+                    className={`min-w-0 ${index === 0 ? 'text-left' : index === 1 ? 'text-center' : 'text-right'} ${look(s).text}`}
+                  >
+                    <span className="block truncate">{sideLabel(s)}</span>
+                    ₹{formatNumber(poolFor(pools, s))}{!open && ` · ${shares[s]}%`}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-0.5 text-center text-[11px] tabular-nums text-ink-muted">
+                {interpolate(t('sports.totalPool'), { amount: formatNumber(total) })}
+              </p>
+            </>
+          ) : total > 0 ? (
             <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] tabular-nums text-ink-muted">
               <span className={finished || !open ? SIDE.yes.text : ''}>
-                {!open && `${sideLabel('yes')} ${share}% · `}₹{formatNumber(event.yes_total)}
+                {!open && `${sideLabel('yes')} ${shares.yes}% · `}₹{formatNumber(event.yes_total)}
               </span>
               <span>{interpolate(t('sports.totalPool'), { amount: formatNumber(total) })}</span>
               <span className={finished || !open ? SIDE.no.text : ''}>
-                ₹{formatNumber(event.no_total)}{!open && ` · ${sideLabel('no')} ${100 - share}%`}
+                ₹{formatNumber(event.no_total)}{!open && ` · ${sideLabel('no')} ${shares.no}%`}
               </span>
             </div>
           ) : (
@@ -287,7 +339,7 @@ export default function SportEventCard({ event, nowMs, popular = false, minBet, 
 
 function BetForm({ event, pool, side, minBet, maxBet, onCancel, onPlaced, onAddFunds }: {
   event: SportEvent;
-  pool: { yesTotal: number; noTotal: number };
+  pool: Pools;
   side: SportSide;
   minBet: number;
   maxBet: number;
@@ -303,9 +355,11 @@ function BetForm({ event, pool, side, minBet, maxBet, onCancel, onPlaced, onAddF
   const [error, setError] = useState<{ text: string; raw?: string; addFunds?: boolean } | null>(null);
   const value = /^[0-9]+$/.test(amount) ? Number(amount) : 0;
   const valid = value >= minBet && value <= maxBet;
-  const look = SIDE[side];
-  const sideLabel = t(side === 'yes' ? 'sports.yes' : 'sports.no');
-  const question = interpolate(t('sports.question'), { team: subjectTeam(event) });
+  const look = lookOf(event, side);
+  const sideLabel = sideName(event, side, t);
+  const title = event.has_draw
+    ? interpolate(t('sports.betTitlePick'), { side: sideLabel })
+    : interpolate(t('sports.betTitle'), { side: sideLabel, question: questionText(event, t) });
   const est = estimatePayout({ stake: value, side, ...pool, feePercent: event.fee_percent });
   const quick = QUICK_AMOUNTS.filter((q) => q >= minBet && q <= maxBet);
 
@@ -333,7 +387,7 @@ function BetForm({ event, pool, side, minBet, maxBet, onCancel, onPlaced, onAddF
   return (
     <div className={`space-y-3 rounded-control border-2 p-3 ${look.border} ${look.bg}`}>
       <p className="text-sm font-semibold text-ink-strong">
-        {interpolate(t('sports.betTitle'), { side: sideLabel, question })}
+        {title}
       </p>
       <div>
         <label htmlFor={`sport-amount-${event.id}`} className="mb-1.5 block text-xs font-medium text-ink-soft">{t('sports.amount')}</label>

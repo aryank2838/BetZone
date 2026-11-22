@@ -5,7 +5,7 @@ import { friendlyError, rawErrorMessage } from '@/lib/errors';
 import { formatCountdown } from '@/lib/countdown';
 import { useVisibleInterval } from '@/lib/useVisibleInterval';
 import {
-  refundReasonKey, sportBetOutcome, subjectTeam,
+  questionText, refundReasonKey, resultText, sideName, sportBetOutcome,
   type MySportBet, type MySportBetTotals, type SportBetPhase,
 } from '@/lib/sportsPool';
 import Alert from '@/components/ui/Alert';
@@ -36,7 +36,6 @@ export function SportBetRow({ bet, nowMs, compact = false }: { bet: MySportBet; 
   const look = PHASE_LOOK[phase];
   const Icon = look.icon;
   const { event } = bet;
-  const team = subjectTeam(event);
   const startsMs = Date.parse(event.starts_at);
   const hasScore = event.home_score !== null && event.away_score !== null && phase !== 'upcoming';
 
@@ -53,9 +52,15 @@ export function SportBetRow({ bet, nowMs, compact = false }: { bet: MySportBet; 
     }
   })();
 
-  const sideClass = bet.side === 'yes'
-    ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
-    : 'border-rose-500/60 bg-rose-500/10 text-rose-200';
+  // Same colours as the match card: teams are sky (home) and violet (away) on a Draw match.
+  const pickedHome = (bet.side === 'yes') === (event.subject_side !== 'away');
+  const sideClass = bet.side === 'draw'
+    ? 'border-amber-500/60 bg-amber-500/10 text-amber-200'
+    : event.has_draw
+      ? pickedHome ? 'border-sky-500/60 bg-sky-500/10 text-sky-100' : 'border-violet-500/60 bg-violet-500/10 text-violet-100'
+      : bet.side === 'yes'
+        ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
+        : 'border-rose-500/60 bg-rose-500/10 text-rose-200';
 
   return (
     <article className={`rounded-card border border-surface-border bg-surface/80 ${compact ? 'p-3' : 'p-4'}`}>
@@ -64,7 +69,7 @@ export function SportBetRow({ bet, nowMs, compact = false }: { bet: MySportBet; 
           <p className="truncate text-xs text-ink-muted">
             {event.competition_name} · {formatDate(event.starts_at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
           </p>
-          <p className="mt-0.5 font-semibold text-ink-strong">{interpolate(t('sports.question'), { team })}</p>
+          <p className="mt-0.5 font-semibold text-ink-strong">{questionText(event, t)}</p>
           <p className="truncate text-sm text-ink-soft">
             {event.home_team} <span className="text-ink-muted">vs</span> {event.away_team}
             {hasScore && <span className="ml-1.5 font-semibold tabular-nums text-ink-strong">· {event.home_score}–{event.away_score}</span>}
@@ -74,8 +79,8 @@ export function SportBetRow({ bet, nowMs, compact = false }: { bet: MySportBet; 
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ${sideClass}`}>
-          {t(bet.side === 'yes' ? 'sports.yes' : 'sports.no')}
+        <span className={`max-w-[60%] truncate rounded-full border px-2.5 py-0.5 text-xs font-bold ${event.has_draw ? '' : 'uppercase tracking-wide'} ${sideClass}`}>
+          {sideName(event, bet.side, t)}
         </span>
         <span className="text-ink-soft">{interpolate(t('sportBets.stake'), { amount: rupees(bet.amount) })}</span>
         {phase === 'won' && (
@@ -88,7 +93,7 @@ export function SportBetRow({ bet, nowMs, compact = false }: { bet: MySportBet; 
 
       {!compact && (phase === 'won' || phase === 'lost') && event.outcome && (
         <p className="mt-2 text-xs text-ink-muted">
-          {interpolate(t(event.outcome === 'yes' ? 'sports.resultYes' : 'sports.resultNo'), { team })}
+          {resultText(event, t)}
         </p>
       )}
       {!compact && phase === 'refunded' && (

@@ -25,7 +25,7 @@ describe('SportEventBets', () => {
       ],
       error: null,
     });
-    render(<SportEventBets eventId="e1" subject="India" />);
+    render(<SportEventBets eventId="e1" match={{ home_team: "India", away_team: "Australia", subject_side: "home" }} />);
 
     expect(await screen.findByText('₹300 · 1 player')).toBeInTheDocument();
     expect(screen.getByText('₹50 · 1 player')).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe('SportEventBets', () => {
 
   it('says so when nobody has bet', async () => {
     rpcMock.mockResolvedValue({ data: [], error: null });
-    render(<SportEventBets eventId="e1" subject="India" />);
+    render(<SportEventBets eventId="e1" match={{ home_team: "India", away_team: "Australia", subject_side: "home" }} />);
     expect(await screen.findByText('No player bets on this match.')).toBeInTheDocument();
   });
 });

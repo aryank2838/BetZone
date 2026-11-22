@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp, ListChecks, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
-import { subjectTeam } from '@/lib/sportsPool';
+import { adminSideName, subjectTeam } from '@/lib/sportsPool';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Badge, { type BadgeTone } from '@/components/ui/Badge';
@@ -80,14 +80,17 @@ interface AdminSportEvent {
   home_score: string | null;
   away_score: string | null;
   result_winner: string | null;
-  outcome: 'yes' | 'no' | null;
+  outcome: 'yes' | 'no' | 'draw' | null;
   void_reason: string | null;
   fee_percent: number;
   fee_taken: number | null;
+  has_draw?: boolean;
   yes_total: number;
   no_total: number;
+  draw_total?: number;
   house_yes: number;
   house_no: number;
+  house_draw?: number;
   house_seeded: boolean;
   /** House's real result on a finished match: + won, - lost. */
   house_net: number | null;
@@ -394,7 +397,8 @@ function MatchRow({ event, busy, onRefund, onSettle }: {
   const canSettle = event.state === 'closed' && Date.now() > Date.parse(event.starts_at) + NINETY_MIN;
   const score = event.home_score != null && event.away_score != null ? ` · ${event.home_score}–${event.away_score}` : '';
   let detail = '';
-  if (event.state === 'settled') detail = `Result ${event.outcome === 'yes' ? 'Yes' : 'No'} · house ${signed(event.house_net ?? event.fee_taken ?? 0)}`;
+  const outcomeLabel = event.outcome ? adminSideName(event, event.outcome) : '';
+  if (event.state === 'settled') detail = `Result ${outcomeLabel}${event.has_draw && event.outcome !== 'draw' ? ' won' : ''} · house ${signed(event.house_net ?? event.fee_taken ?? 0)}`;
   if (event.state === 'void') detail = `Refunded: ${event.void_reason ?? ''}`;
   if (event.state === 'closed' && event.result_winner) detail = `Result received (${event.result_winner}), paying out after 30 min`;
 
@@ -405,15 +409,25 @@ function MatchRow({ event, busy, onRefund, onSettle }: {
           <div className="min-w-0">
             <p className="text-xs text-ink-muted">{event.competition_name} · {when(event.starts_at)}{score}</p>
             <p className="font-semibold text-ink-strong">{event.home_team} vs {event.away_team}</p>
-            <p className="text-xs text-ink-soft">Will {subjectTeam(event)} win?</p>
+            <p className="text-xs text-ink-soft">
+              {event.has_draw
+                ? 'Who will win? · team / Draw / team'
+                : `Will ${subjectTeam(event)} win?${event.sport === 'football' ? ' · draw counts as No' : ''}`}
+            </p>
           </div>
           <Badge tone={STATE_TONE[event.state]}>{event.state}</Badge>
         </div>
         <p className="text-sm text-ink-soft">
-          Yes ₹{event.yes_total} · No ₹{event.no_total} · {event.bettors} {event.bettors === 1 ? 'player' : 'players'} · fee {event.fee_percent}%
+          {event.has_draw
+            ? `${event.home_team} ₹${event.subject_side === 'away' ? event.no_total : event.yes_total} · Draw ₹${event.draw_total ?? 0} · ${event.away_team} ₹${event.subject_side === 'away' ? event.yes_total : event.no_total}`
+            : `Yes ₹${event.yes_total} · No ₹${event.no_total}`} · {event.bettors} {event.bettors === 1 ? 'player' : 'players'} · fee {event.fee_percent}%
         </p>
         {event.house_seeded && (
-          <p className="text-xs text-ink-muted">Includes house money: ₹{event.house_yes} on Yes, ₹{event.house_no} on No</p>
+          <p className="text-xs text-ink-muted">
+            {event.has_draw
+              ? `Includes house money: ₹${event.house_yes} on each team and ₹${event.house_draw ?? 0} on Draw`
+              : `Includes house money: ₹${event.house_yes} on Yes, ₹${event.house_no} on No`}
+          </p>
         )}
         {detail && <p className="text-xs text-ink-muted">{detail}</p>}
         {event.bettors > 0 && (
@@ -428,7 +442,9 @@ function MatchRow({ event, busy, onRefund, onSettle }: {
             {showBets ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
           </button>
         )}
-        {showBets && <SportEventBets eventId={event.id} subject={subjectTeam(event)} />}
+        {showBets && (
+          <SportEventBets eventId={event.id} match={event} />
+        )}
         {active && (
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" loading={busy} onClick={() => onRefund(event)}>Refund all</Button>

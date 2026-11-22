@@ -114,3 +114,44 @@ export function useInstallPrompt() {
 
   return { mode, install, dismiss };
 }
+
+/** Where the Android app (APK) is published, next to the website. */
+export const ANDROID_APK_PATH = '/downloads/betzone.apk';
+
+export function isAndroid(userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent): boolean {
+  return /android/i.test(userAgent);
+}
+
+let apkCheck: Promise<boolean> | null = null;
+
+/**
+ * Is the APK really on the server? The site sends index.html (200) for any
+ * unknown path, so a missing file is caught by its content type. Checked once
+ * per page load, so the button never links to a file that is not there.
+ */
+export function checkAndroidApk(fetcher: typeof fetch = fetch): Promise<boolean> {
+  if (!apkCheck) {
+    apkCheck = fetcher(ANDROID_APK_PATH, { method: 'HEAD', cache: 'no-store' })
+      .then((response) => response.ok && !(response.headers.get('content-type') ?? '').includes('text/html'))
+      .catch(() => false);
+  }
+  return apkCheck;
+}
+
+/** For tests. */
+export function resetAndroidApkCheck() {
+  apkCheck = null;
+}
+
+/** True on an Android phone's browser when the APK can be downloaded. */
+export function useAndroidApk(): boolean {
+  const eligible = isAndroid() && !isStandalone();
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    if (!eligible) return;
+    let active = true;
+    void checkAndroidApk().then((ok) => { if (active) setAvailable(ok); });
+    return () => { active = false; };
+  }, [eligible]);
+  return eligible && available;
+}

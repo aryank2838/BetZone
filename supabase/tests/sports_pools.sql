@@ -40,6 +40,8 @@ DECLARE
   v_h1 uuid;
   v_h2 uuid;
   v_h3 uuid;
+  v_d1 uuid;
+  v_d2 uuid;
   v_u2_wallet integer;
   v_u3_wallet integer;
   v_result jsonb;
@@ -322,6 +324,81 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT; END;
   IF v_error IS NULL OR v_error NOT ILIKE '%House money per side%' THEN
     RAISE EXCEPTION 'negative house money was accepted: %', v_error;
+  END IF;
+
+  -- Draw pool. Today's house money is used up (h1, h2), so the pools are players only.
+  IF public.sport_outcome_for_winner('home', false, 'draw') <> 'no'
+     OR public.sport_outcome_for_winner('home', true, 'draw') <> 'draw'
+     OR public.sport_outcome_for_winner('away', true, 'away') <> 'yes'
+     OR public.sport_outcome_for_winner('away', true, 'home') <> 'no' THEN
+    RAISE EXCEPTION 'feed result does not map to the right pool';
+  END IF;
+  -- A Yes/No match does not take Draw bets.
+  PERFORM set_config('request.jwt.claim.sub', v_u2::text, true);
+  v_error := NULL;
+  BEGIN
+    PERFORM public.place_sport_bet(v_ev1, 'draw', 50);
+  EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS v_error = MESSAGE_TEXT; END;
+  IF v_error IS NULL OR v_error NOT ILIKE '%no Draw option%' THEN
+    RAISE EXCEPTION 'draw bet accepted on a Yes/No match: %', v_error;
+  END IF;
+
+  -- A synced football match has three pools; a draw pays only Draw bets.
+  PERFORM public.sports_sync_upsert(jsonb_build_array(jsonb_build_object(
+    'provider', 'test', 'provider_event_id', 'd1', 'sport', 'football',
+    'competition', 'PL', 'competition_name', 'Premier League',
+    'home_team', 'Tie FC', 'away_team', 'Level FC', 'subject_side', 'home',
+    'starts_at', now() + interval '1 day', 'status', 'scheduled',
+    'home_score', NULL, 'away_score', NULL, 'winner', NULL)));
+  SELECT id INTO v_d1 FROM public.sport_events WHERE provider = 'test' AND provider_event_id = 'd1';
+  IF NOT (SELECT has_draw FROM public.sport_events WHERE id = v_d1) THEN
+    RAISE EXCEPTION 'synced football match has no Draw pool';
+  END IF;
+  PERFORM public.place_sport_bet(v_d1, 'yes', 100);
+  PERFORM set_config('request.jwt.claim.sub', v_u3::text, true);
+  PERFORM public.place_sport_bet(v_d1, 'draw', 100);
+  PERFORM set_config('request.jwt.claim.sub', v_u4::text, true);
+  PERFORM public.place_sport_bet(v_d1, 'no', 100);
+  IF (SELECT draw_total FROM public.sport_events WHERE id = v_d1) <> 100
+     OR (public.get_sport_events('football')->'events') @> jsonb_build_array(
+          jsonb_build_object('id', v_d1, 'my_draw', 0, 'my_no', 100)) IS NOT TRUE THEN
+    RAISE EXCEPTION 'draw bet was not recorded';
+  END IF;
+  UPDATE public.sport_events SET starts_at = now() - interval '3 hours' WHERE id = v_d1;
+  PERFORM public.sports_sync_upsert(jsonb_build_array(jsonb_build_object(
+    'provider', 'test', 'provider_event_id', 'd1', 'sport', 'football',
+    'competition', 'PL', 'competition_name', 'Premier League',
+    'home_team', 'Tie FC', 'away_team', 'Level FC', 'subject_side', 'home',
+    'starts_at', now() - interval '3 hours', 'status', 'finished',
+    'home_score', '1', 'away_score', '1', 'winner', 'draw')));
+  UPDATE public.sport_events SET result_seen_at = now() - interval '31 minutes' WHERE id = v_d1;
+  SELECT wallet INTO v_u3_wallet FROM public.profiles WHERE id = v_u3;
+  PERFORM public.sports_sync_upsert(jsonb_build_array(jsonb_build_object(
+    'provider', 'test', 'provider_event_id', 'd1', 'sport', 'football',
+    'competition', 'PL', 'competition_name', 'Premier League',
+    'home_team', 'Tie FC', 'away_team', 'Level FC', 'subject_side', 'home',
+    'starts_at', now() - interval '3 hours', 'status', 'finished',
+    'home_score', '1', 'away_score', '1', 'winner', 'draw')));
+  -- Losing pools 200, fee 20, the Draw bettor gets 100 + 180.
+  IF (SELECT outcome FROM public.sport_events WHERE id = v_d1) IS DISTINCT FROM 'draw'
+     OR (SELECT wallet FROM public.profiles WHERE id = v_u3) <> v_u3_wallet + 280
+     OR (SELECT house_net FROM public.sport_events WHERE id = v_d1) <> 20
+     OR (SELECT count(*) FROM public.sport_bets WHERE event_id = v_d1 AND status = 'lost') <> 2 THEN
+    RAISE EXCEPTION 'draw result paid out wrongly: %', (SELECT to_jsonb(e) FROM public.sport_events e WHERE id = v_d1);
+  END IF;
+
+  -- Nobody on the winning pool: everyone is refunded.
+  INSERT INTO public.sport_events (sport, provider, provider_event_id, competition, competition_name,
+    home_team, away_team, starts_at, fee_percent, has_draw)
+  VALUES ('football', 'test', 'd2', 'PL', 'Premier League', 'Even FC', 'Square FC', now() + interval '1 day', 10, true)
+  RETURNING id INTO v_d2;
+  PERFORM public.place_sport_bet(v_d2, 'no', 50);
+  PERFORM set_config('request.jwt.claim.sub', v_u2::text, true);
+  PERFORM public.place_sport_bet(v_d2, 'yes', 50);
+  v_result := public.sport_settle_internal(v_d2, 'draw');
+  IF v_result->>'state' <> 'void' OR v_result->>'reason' <> 'no_winners'
+     OR EXISTS (SELECT 1 FROM public.sport_bets WHERE event_id = v_d2 AND status <> 'refunded') THEN
+    RAISE EXCEPTION 'match with nobody on the winning pool was not refunded: %', v_result;
   END IF;
 
   -- Clients cannot call the automation or the internal settlement.

@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { competitionsOf, estimatePayout, matchesSearch, sportBetOutcome, isBettable, playerMoney, poolForEstimate, popularIds, sortMatches, subjectTeam, thinSide, yesShare, type SportEvent } from './sportsPool';
+import { competitionsOf, estimatePayout, matchesSearch, questionText, resultText, sideName, sidesOf, sportBetOutcome, isBettable, playerMoney, poolForEstimate, popularIds, sortMatches, poolShares, subjectTeam, thinSide, type SportEvent } from './sportsPool';
 
 describe('house money', () => {
   it('counts the coming house money on a match that has not had it yet', () => {
     expect(poolForEstimate({ yes_total: 0, no_total: 0, house_seeded: false }, 50))
-      .toEqual({ yesTotal: 50, noTotal: 50 });
+      .toEqual({ yesTotal: 50, noTotal: 50, drawTotal: 0 });
     // Already in the totals: not added twice.
     expect(poolForEstimate({ yes_total: 550, no_total: 50, house_seeded: true }, 50))
-      .toEqual({ yesTotal: 550, noTotal: 50 });
+      .toEqual({ yesTotal: 550, noTotal: 50, drawTotal: 0 });
     // Budget used up today.
     expect(poolForEstimate({ yes_total: 200, no_total: 0, house_seeded: false }, 0))
-      .toEqual({ yesTotal: 200, noTotal: 0 });
+      .toEqual({ yesTotal: 200, noTotal: 0, drawTotal: 0 });
   });
 
   it('a first bet with house money pays instead of refunding', () => {
@@ -26,6 +26,60 @@ describe('house money', () => {
     expect(thinSide(550, 50)).toBe('no');
     expect(thinSide(20, 1000)).toBe('yes');
     expect(thinSide(75, 225)).toBeNull(); // exactly a quarter is not thin
+  });
+
+  it('thinSide on a three-way pool looks for under a sixth', () => {
+    expect(thinSide(400, 400, 100)).toBe('draw');
+    expect(thinSide(300, 300, 300)).toBeNull();
+    expect(thinSide(500, 50, 50)).toBe('no'); // both thin: the first of the emptiest
+    expect(thinSide(100, 500, 0)).toBe('draw');
+  });
+
+  it('seeds the Draw pool only on a Draw match', () => {
+    expect(poolForEstimate({ yes_total: 0, no_total: 0, draw_total: 0, has_draw: true, house_seeded: false }, 50))
+      .toEqual({ yesTotal: 50, noTotal: 50, drawTotal: 50 });
+    expect(poolForEstimate({ yes_total: 0, no_total: 0, has_draw: false, house_seeded: false }, 50).drawTotal).toBe(0);
+  });
+});
+
+describe('team names on a Draw match', () => {
+  const t = (key: string) => ({
+    'sports.yes': 'Yes', 'sports.no': 'No', 'sports.draw': 'Draw',
+    'sports.question': 'Will {team} win?', 'sports.questionWho': 'Who will win?',
+    'sports.resultTeam': 'Result: {team} won', 'sports.resultDraw': 'Result: Draw',
+    'sports.resultYes': 'Result: Yes, {team} won', 'sports.resultNo': 'Result: No, {team} did not win',
+  } as Record<string, string>)[key] ?? key;
+  const teams = { home_team: 'Leeds', away_team: 'Burnley' };
+
+  it('orders home, Draw, away and names the sides after the teams', () => {
+    const home = { ...teams, subject_side: 'home' as const, has_draw: true };
+    const away = { ...teams, subject_side: 'away' as const, has_draw: true };
+    expect(sidesOf(home).map((s) => sideName(home, s, t))).toEqual(['Leeds', 'Draw', 'Burnley']);
+    expect(sidesOf(away).map((s) => sideName(away, s, t))).toEqual(['Leeds', 'Draw', 'Burnley']);
+    expect(questionText(home, t)).toBe('Who will win?');
+    expect(resultText({ ...away, outcome: 'yes' }, t)).toBe('Result: Burnley won');
+    expect(resultText({ ...away, outcome: 'draw' }, t)).toBe('Result: Draw');
+  });
+
+  it('keeps Yes / No on a match without a Draw pool', () => {
+    const plain = { ...teams, subject_side: 'home' as const, has_draw: false };
+    expect(sidesOf(plain).map((s) => sideName(plain, s, t))).toEqual(['Yes', 'No']);
+    expect(questionText(plain, t)).toBe('Will Leeds win?');
+    expect(resultText({ ...plain, outcome: 'no' }, t)).toBe('Result: No, Leeds did not win');
+  });
+});
+
+describe('estimatePayout with a Draw pool', () => {
+  it('a Draw bet wins both other pools, minus the fee', () => {
+    // Same numbers as the SQL test: Yes 100, No 100, Draw 0 + 100 -> 100 + 180.
+    expect(estimatePayout({ stake: 100, side: 'draw', yesTotal: 100, noTotal: 100, drawTotal: 0, feePercent: 10 }))
+      .toEqual({ payout: 280, refund: false });
+  });
+
+  it('a Yes bet also wins the Draw pool', () => {
+    // Yes 100 + 100 = 200, losing 200 + 100 = 300, fee 30: 100 + floor(270 * 100 / 200) = 235.
+    expect(estimatePayout({ stake: 100, side: 'yes', yesTotal: 100, noTotal: 200, drawTotal: 100, feePercent: 10 }).payout)
+      .toBe(235);
   });
 });
 
@@ -56,10 +110,18 @@ describe('estimatePayout', () => {
 });
 
 describe('helpers', () => {
-  it('yesShare is 50 for an empty pool and rounds otherwise', () => {
-    expect(yesShare(0, 0)).toBe(50);
-    expect(yesShare(700, 300)).toBe(70);
-    expect(yesShare(1, 2)).toBe(33);
+  it('poolShares splits evenly when empty and always adds up to 100', () => {
+    const two = ['yes', 'no'] as const;
+    const three = ['yes', 'draw', 'no'] as const;
+    expect(poolShares({ yesTotal: 0, noTotal: 0, drawTotal: 0 }, [...two])).toMatchObject({ yes: 50, no: 50 });
+    expect(poolShares({ yesTotal: 700, noTotal: 300, drawTotal: 0 }, [...two])).toMatchObject({ yes: 70, no: 30 });
+    expect(poolShares({ yesTotal: 1, noTotal: 2, drawTotal: 0 }, [...two])).toMatchObject({ yes: 33, no: 67 });
+    const empty3 = poolShares({ yesTotal: 0, noTotal: 0, drawTotal: 0 }, [...three]);
+    expect(empty3.yes + empty3.draw + empty3.no).toBe(100);
+    expect(poolShares({ yesTotal: 100, noTotal: 100, drawTotal: 100 }, [...three]))
+      .toEqual({ yes: 34, draw: 33, no: 33 });
+    expect(poolShares({ yesTotal: 500, noTotal: 300, drawTotal: 200 }, [...three]))
+      .toEqual({ yes: 50, draw: 20, no: 30 });
   });
 
   it('subjectTeam follows subject_side', () => {

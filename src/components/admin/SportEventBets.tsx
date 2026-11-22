@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
+import { adminSideName, sidesOf, subjectTeam, type SportEvent, type SportSide } from '@/lib/sportsPool';
 import Alert from '@/components/ui/Alert';
 
 export interface AdminSportBet {
   id: string;
   user_id: string;
   user_name: string;
-  side: 'yes' | 'no';
+  side: SportSide;
   amount: number;
   from_points: number;
   from_wallet: number;
@@ -18,6 +19,21 @@ export interface AdminSportBet {
 }
 
 const rupees = (value: number) => `₹${value.toLocaleString('en-IN')}`;
+const LOOK = {
+  yes: { text: 'text-emerald-300', tile: 'border-emerald-800/60 bg-emerald-950/30' },
+  no: { text: 'text-rose-300', tile: 'border-rose-800/60 bg-rose-950/30' },
+  draw: { text: 'text-amber-300', tile: 'border-amber-800/60 bg-amber-950/30' },
+  // Teams on a Draw match, same colours as the player's match card.
+  home: { text: 'text-sky-300', tile: 'border-sky-800/60 bg-sky-950/30' },
+  away: { text: 'text-violet-300', tile: 'border-violet-800/60 bg-violet-950/30' },
+} as const;
+
+type BetsMatch = Pick<SportEvent, 'home_team' | 'away_team' | 'subject_side' | 'has_draw'>;
+
+function lookOf(match: BetsMatch, side: SportSide) {
+  if (!match.has_draw || side === 'draw') return LOOK[side];
+  return (side === 'yes') === (match.subject_side !== 'away') ? LOOK.home : LOOK.away;
+}
 const time = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 
 const STATUS: Record<AdminSportBet['status'], { label: (bet: AdminSportBet) => string; className: string }> = {
@@ -28,10 +44,12 @@ const STATUS: Record<AdminSportBet['status'], { label: (bet: AdminSportBet) => s
 };
 
 /** Every player's bet on one match, shown when the admin opens "See bets". */
-export default function SportEventBets({ eventId, subject }: { eventId: string; subject: string }) {
+export default function SportEventBets({ eventId, match }: { eventId: string; match: BetsMatch }) {
   const [bets, setBets] = useState<AdminSportBet[] | null>(null);
   const [error, setError] = useState<{ text: string; raw?: string } | null>(null);
-  const [side, setSide] = useState<'all' | 'yes' | 'no'>('all');
+  const [side, setSide] = useState<'all' | SportSide>('all');
+  const sides = sidesOf(match);
+  const subject = subjectTeam(match);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
@@ -50,11 +68,11 @@ export default function SportEventBets({ eventId, subject }: { eventId: string; 
   }, [eventId]);
 
   const totals = useMemo(() => {
-    const sum = (which: 'yes' | 'no') => {
+    const sum = (which: AdminSportBet['side']) => {
       const rows = (bets ?? []).filter((bet) => bet.side === which);
       return { players: new Set(rows.map((bet) => bet.user_id)).size, amount: rows.reduce((total, bet) => total + bet.amount, 0) };
     };
-    return { yes: sum('yes'), no: sum('no') };
+    return { yes: sum('yes'), no: sum('no'), draw: sum('draw') };
   }, [bets]);
 
   if (error) return <Alert tone="error" details={error.raw}>{error.text}</Alert>;
@@ -71,21 +89,22 @@ export default function SportEventBets({ eventId, subject }: { eventId: string; 
 
   return (
     <div className="space-y-3 border-t border-surface-border pt-3">
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="rounded-lg border border-emerald-800/60 bg-emerald-950/30 px-3 py-2">
-          <p className="text-xs text-emerald-300">Yes · {subject} wins</p>
-          <p className="font-semibold text-ink-strong">{rupees(totals.yes.amount)} · {totals.yes.players} {totals.yes.players === 1 ? 'player' : 'players'}</p>
-        </div>
-        <div className="rounded-lg border border-rose-800/60 bg-rose-950/30 px-3 py-2">
-          <p className="text-xs text-rose-300">No</p>
-          <p className="font-semibold text-ink-strong">{rupees(totals.no.amount)} · {totals.no.players} {totals.no.players === 1 ? 'player' : 'players'}</p>
-        </div>
+      <div className={`grid gap-2 text-sm ${match.has_draw ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2'}`}>
+        {sides.map((s) => (
+          <div key={s} className={`rounded-lg border px-3 py-2 ${lookOf(match, s).tile}`}>
+            <p className={`truncate text-xs ${lookOf(match, s).text}`}>
+              {adminSideName(match, s)}
+              {match.has_draw ? (s !== 'draw' && ' wins') : s === 'yes' && ` · ${subject} wins`}
+            </p>
+            <p className="font-semibold text-ink-strong">{rupees(totals[s].amount)} · {totals[s].players} {totals[s].players === 1 ? 'player' : 'players'}</p>
+          </div>
+        ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {(['all', 'yes', 'no'] as const).map((value) => (
+        {(['all', ...sides] as const).map((value) => (
           <button key={value} type="button" aria-pressed={side === value} onClick={() => setSide(value)} className={chip(side === value)}>
-            {value === 'all' ? `All ${bets.length}` : value === 'yes' ? 'Yes' : 'No'}
+            {value === 'all' ? `All ${bets.length}` : adminSideName(match, value)}
           </button>
         ))}
         {bets.length > 8 && (
@@ -120,7 +139,7 @@ export default function SportEventBets({ eventId, subject }: { eventId: string; 
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold tabular-nums">
-                    <span className={bet.side === 'yes' ? 'text-emerald-300' : 'text-rose-300'}>{bet.side === 'yes' ? 'Yes' : 'No'}</span>
+                    <span className={lookOf(match, bet.side).text}>{adminSideName(match, bet.side)}</span>
                     <span className="text-ink-strong"> {rupees(bet.amount)}</span>
                   </p>
                   <p className={`text-xs ${look.className}`}>{look.label(bet)}</p>

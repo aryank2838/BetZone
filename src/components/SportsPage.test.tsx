@@ -77,3 +77,44 @@ describe('SportsPage search', () => {
     expect(screen.getByText('Will India win?')).toBeInTheDocument();
   });
 });
+
+describe('SportsPage draw pool', () => {
+  it('shows home team / Draw / away team buttons and places a draw bet', async () => {
+    const drawMatch = { ...match('football', 'Leeds', 'Burnley', 'Championship'), has_draw: true, draw_total: 0, my_draw: 0 };
+    mockBackend([drawMatch, match('cricket', 'India', 'England', 'Test Series')]);
+    render(<SportsPage onAddFunds={vi.fn()} onMyBets={vi.fn()} />);
+    expect(await screen.findByText('Who will win?')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Yes/ })).not.toBeInTheDocument();
+    const picks = screen.getAllByRole('button', { pressed: false }).map((button) => button.textContent ?? '');
+    expect(picks.findIndex((text) => text.startsWith('Leeds'))).toBeLessThan(picks.findIndex((text) => text.startsWith('Draw')));
+    expect(picks.findIndex((text) => text.startsWith('Draw'))).toBeLessThan(picks.findIndex((text) => text.startsWith('Burnley')));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Draw/ }));
+    expect(screen.getByText('Your pick: Draw')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('How much do you want to bet?'), { target: { value: '100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bet ₹100' }));
+    await vi.waitFor(() => expect(rpcMock).toHaveBeenCalledWith('place_sport_bet',
+      { p_event_id: drawMatch.id, p_side: 'draw', p_amount: 100 }));
+  });
+
+  it('a team button bets on that team, also when the question is about the away side', async () => {
+    const drawMatch = { ...match('football', 'Leeds', 'Burnley', 'Championship'), has_draw: true, subject_side: 'away' as const };
+    mockBackend([drawMatch]);
+    render(<SportsPage onAddFunds={vi.fn()} onMyBets={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: /^Leeds/ }));
+    expect(screen.getByText('Your pick: Leeds')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('How much do you want to bet?'), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bet ₹50' }));
+    // Leeds is the home team and the question is about Burnley, so Leeds is "no".
+    await vi.waitFor(() => expect(rpcMock).toHaveBeenCalledWith('place_sport_bet',
+      { p_event_id: drawMatch.id, p_side: 'no', p_amount: 50 }));
+  });
+
+  it('keeps Yes/No only on a match without a Draw pool', async () => {
+    mockBackend([match('football', 'Ajax', 'PSV', 'Eredivisie')]);
+    render(<SportsPage onAddFunds={vi.fn()} onMyBets={vi.fn()} />);
+    await screen.findByText('Will Ajax win?');
+    expect(screen.queryByRole('button', { name: /^Draw/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Yes/ })).toBeInTheDocument();
+  });
+});

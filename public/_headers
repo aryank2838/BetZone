@@ -18,3 +18,16 @@
 /sw.js
   Cache-Control: no-cache
   Service-Worker-Allowed: /
+
+# Android app download: served as an app file, never cached, so a new
+# version is picked up straight away.
+/downloads/*
+  Content-Type: application/vnd.android.package-archive
+  Content-Disposition: attachment; filename="BetZone.apk"
+  Cache-Control: no-cache
+  X-Content-Type-Options: nosniff
+
+# Lets Android verify the BetZone app belongs to this site (hides the address bar).
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Access-Control-Allow-Origin: *

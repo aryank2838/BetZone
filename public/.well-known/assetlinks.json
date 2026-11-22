@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "net.in.betzone.app",
+      "sha256_cert_fingerprints": [
+        "89:EC:97:66:E0:20:B5:72:92:47:B0:7B:33:B8:86:3B:66:7B:F0:A6:FF:E2:18:F1:ED:C8:52:77:4A:B0:30:69"
+      ]
+    }
+  }
+]
