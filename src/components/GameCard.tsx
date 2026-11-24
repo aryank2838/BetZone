@@ -45,13 +45,14 @@ function GameIcon({ game, small }: { game: string; small?: boolean }) {
   );
 }
 
-export default function GameCard({ status, phase, result, nowMs, disabled, onOpen }: {
+export default function GameCard({ status, phase, result, nowMs, disabled, onOpen, onOpenChart }: {
   status: GameStatus;
   phase: GamePhase;
   result: GameResult | null | undefined;
   nowMs: number;
   disabled?: boolean;
   onOpen: () => void;
+  onOpenChart?: () => void;
 }) {
   const { t, language } = useT();
   const name = status.label || GAME_LABELS[status.game];
@@ -187,7 +188,7 @@ export default function GameCard({ status, phase, result, nowMs, disabled, onOpe
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
-      <PastResults game={status.game} />
+      <PastResults game={status.game} onOpenChart={onOpenChart} />
     </article>
   );
 }

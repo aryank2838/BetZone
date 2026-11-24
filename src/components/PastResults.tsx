@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Game } from '@/types';
 import { friendlyError, rawErrorMessage } from '@/lib/errors';
-import { ChevronDown, Trophy } from 'lucide-react';
+import { BarChart3, ChevronDown, Trophy } from 'lucide-react';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { buttonClasses } from '@/components/ui/buttonClasses';
@@ -21,11 +21,13 @@ interface ResultRow {
 
 interface PastResultsProps {
   game: Game;
+  /** Opens the full chart and number stats for this game. */
+  onOpenChart?: () => void;
 }
 
 const PAGE_SIZE = 10;
 
-export default function PastResults({ game }: PastResultsProps) {
+export default function PastResults({ game, onOpenChart }: PastResultsProps) {
   const { t } = useT();
   const [expanded, setExpanded] = useState(false);
   const [rows, setRows] = useState<ResultRow[]>([]);
@@ -80,12 +82,23 @@ export default function PastResults({ game }: PastResultsProps) {
 
   return (
     <section className="border-t border-surface-border bg-surface-page/40">
-      <button type="button" onClick={toggle} aria-expanded={expanded} className="flex min-h-tap w-full items-center justify-between px-5 py-3 text-left hover:bg-surface-raised/40">
-        <span className="flex items-center gap-2 text-sm font-medium text-ink-soft">
-          <Trophy className="h-4 w-4 text-amber-400" aria-hidden="true" /> {t('results.past')}
-        </span>
-        <ChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
-      </button>
+      <div className="flex items-stretch">
+        <button type="button" onClick={toggle} aria-expanded={expanded} className="flex min-h-tap flex-1 items-center justify-between px-5 py-3 text-left hover:bg-surface-raised/40">
+          <span className="flex items-center gap-2 text-sm font-medium text-ink-soft">
+            <Trophy className="h-4 w-4 text-amber-400" aria-hidden="true" /> {t('results.past')}
+          </span>
+          <ChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </button>
+        {onOpenChart && (
+          <button
+            type="button"
+            onClick={onOpenChart}
+            className="flex min-h-tap shrink-0 items-center gap-1.5 border-l border-surface-border px-4 text-sm font-semibold text-accent-400 hover:bg-surface-raised/40"
+          >
+            <BarChart3 className="h-4 w-4" aria-hidden="true" /> {t('chart.open')}
+          </button>
+        )}
+      </div>
       {expanded && (
         <div className="border-t border-surface-border px-5 py-3">
           {loading && <ListSkeleton rows={2} />}

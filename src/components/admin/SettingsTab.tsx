@@ -1,5 +1,5 @@
 import { useId, type InputHTMLAttributes, type ReactNode } from 'react';
-import { CheckCircle2, Settings as SettingsIcon } from 'lucide-react';
+import { CheckCircle2, Settings as SettingsIcon, Trophy } from 'lucide-react';
 import { ListSkeleton } from '@/components/Skeleton';
 import { lastChangedText } from './settingsMeta';
 
@@ -63,9 +63,39 @@ export default function SettingsTab(props: SettingsTabProps) {
     onApprovalTimeNoteChange, onSupportWhatsAppChange, onSupportEmailChange, onMaxUserRoundBalanceChange, onMaxNumberLiabilityChange, onSave,
   } = props;
   const shared = { meta, saving, onSave };
+  // Unset means on: the ticker shows until the admin turns it off.
+  const tickerOn = (meta.winners_ticker?.value ?? 'on') !== 'off';
 
   return (
     <section className="space-y-4 animate-fade-in">
+      <div className="border border-surface-border rounded-card bg-surface/80 p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <Trophy className="w-4 h-4 text-amber-400" />
+          <h3 className="text-xs font-medium text-ink-muted uppercase tracking-wide">Home Page</h3>
+        </div>
+        {loading ? <ListSkeleton rows={1} /> : (
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-ink-strong">Winners ticker</p>
+                <p className="text-xs text-ink-muted mt-0.5">Scrolling strip of real wins from the last 3 days on players' Home screen. Names are hidden (e.g. "A***"); admin accounts never appear.</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={tickerOn}
+                aria-label="Winners ticker"
+                disabled={saving}
+                onClick={() => onSave('winners_ticker', tickerOn ? 'off' : 'on')}
+                className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-40 ${tickerOn ? 'bg-emerald-600' : 'bg-surface-strong'}`}
+              >
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${tickerOn ? 'left-6' : 'left-1'}`} />
+              </button>
+            </div>
+            <p className="text-xs text-ink-muted mt-2" data-testid="setting-meta-winners_ticker">{lastChangedText(meta.winners_ticker)}</p>
+          </div>
+        )}
+      </div>
       <div className="border border-surface-border rounded-card bg-surface/80 p-5 space-y-4">
         <div className="flex items-center gap-2">
           <SettingsIcon className="w-4 h-4 text-amber-400" />

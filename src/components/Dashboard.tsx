@@ -17,6 +17,7 @@ import AdminAlertsProvider from '@/lib/AdminAlertsProvider';
 import MoneyNotices from '@/components/MoneyNotices';
 import InstallBanner from '@/components/InstallBanner';
 import HelpButton from '@/components/HelpButton';
+import WinnersTicker from '@/components/WinnersTicker';
 import { useMoneyNotices, useNoticeText, type MoneyNotice } from '@/lib/useMoneyNotices';
 import { useToast } from '@/components/ui/toastContext';
 import type { AdminTab } from '@/components/AdminPanel';
@@ -41,6 +42,7 @@ const PlayLimitsPage = lazy(() => import('@/components/PlayLimitsPage'));
 const RulesPage = lazy(() => import('@/components/RulesPage'));
 const SettingsPage = lazy(() => import('@/components/SettingsPage'));
 const SportsPage = lazy(() => import('@/components/SportsPage'));
+const ResultsChartPage = lazy(() => import('@/components/ResultsChartPage'));
 
 function PageLoading() {
   const { t } = useT();
@@ -139,6 +141,9 @@ function DashboardContent({ nav, navigate, goHome, adminTarget, openAdmin }: {
         />
       </Suspense>
     );
+  }
+  if (nav.view === 'charts' && nav.game && user) {
+    return <Suspense fallback={<PageLoading />}><ResultsChartPage game={nav.game} onBack={() => goHome()} /></Suspense>;
   }
   if (nav.view === 'admin' && user && profile?.is_admin) {
     return (
@@ -334,6 +339,8 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
           </dl>
         </section>
 
+        <WinnersTicker />
+
         {referral && <ReferralTeaser data={referral} onOpen={openReferral} />}
 
         <PlayLimitsSummary limits={limits} onOpen={() => onNavigate('limits')} />
@@ -382,6 +389,7 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
                     nowMs={nowMs}
                     disabled={profile?.is_banned}
                     onOpen={() => onNavigate('game', status.game)}
+                    onOpenChart={() => onNavigate('charts', status.game)}
                   />
                 </div>
               ));

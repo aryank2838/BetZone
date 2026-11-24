@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Game } from '@/types';
 
-export type NavView = 'home' | 'sports' | 'wallet' | 'admin' | 'balance' | 'game' | 'mybets' | 'limits' | 'rules' | 'settings' | 'terms' | 'privacy' | 'contact';
+export type NavView = 'home' | 'sports' | 'wallet' | 'admin' | 'balance' | 'game' | 'charts' | 'mybets' | 'limits' | 'rules' | 'settings' | 'terms' | 'privacy' | 'contact';
 
 interface NavState {
   view: NavView;
@@ -13,11 +13,11 @@ const SESSION_KEY = 'betzone_nav';
 function validNavState(value: unknown): value is NavState {
   if (!value || typeof value !== 'object') return false;
   const nav = value as Partial<NavState>;
-  const validViews: NavView[] = ['home', 'sports', 'wallet', 'admin', 'balance', 'game', 'mybets', 'limits', 'rules', 'settings', 'terms', 'privacy', 'contact'];
+  const validViews: NavView[] = ['home', 'sports', 'wallet', 'admin', 'balance', 'game', 'charts', 'mybets', 'limits', 'rules', 'settings', 'terms', 'privacy', 'contact'];
   return validViews.includes(nav.view as NavView)
     // Game ids come from game_schedule; the server rejects unknown ones.
     && (nav.game === null || (typeof nav.game === 'string' && /^[a-z0-9_]{1,40}$/.test(nav.game)))
-    && (nav.view !== 'game' || nav.game !== null);
+    && ((nav.view !== 'game' && nav.view !== 'charts') || nav.game !== null);
 }
 
 /** Screens a notification link (`/?open=…`) can open. */

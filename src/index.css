@@ -111,3 +111,17 @@
 @media (prefers-reduced-motion: reduce) {
   .game-card-closing { box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.22); }
 }
+
+/* Home screen: the winners ticker scrolls its (doubled) list from right to left. */
+@keyframes winnersMarquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.winners-marquee { animation: winnersMarquee var(--marquee-duration, 40s) linear infinite; }
+.winners-ticker:hover .winners-marquee,
+.winners-ticker:focus-within .winners-marquee { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .winners-ticker { overflow-x: auto; }
+  .winners-marquee { animation: none; }
+  .winners-marquee > ul + ul { display: none; }
+}

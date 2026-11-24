@@ -110,6 +110,7 @@ const SETTING_LABELS: Record<string, string> = {
   support_email: 'Support email',
   max_user_round_points: 'Per-user round stake limit',
   max_number_liability: 'Per-number liability limit',
+  winners_ticker: 'Winners ticker',
 };
 const settingLabel = (key: string) => SETTING_LABELS[key] ?? key;
 
