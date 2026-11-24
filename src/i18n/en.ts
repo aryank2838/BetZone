@@ -369,7 +369,7 @@ const en = {
   'money.copied': 'Copied',
   'money.payExactly': 'Pay exactly ₹{amount} to {name}',
   'money.otherApp': 'BHIM / Other',
-  'money.appNotOpening': "If the app doesn't open, copy the UPI ID and pay from your UPI app.",
+  'money.appNotOpening': "App not opening, or it says \"bank limit exceeded\" / payment failed? No money was taken. Copy the UPI ID above, open your UPI app, choose \"Pay to UPI ID\" and enter ₹{amount} yourself.",
   'money.screenshot': 'Payment screenshot',
   'money.removeScreenshot': 'Remove screenshot',
   'money.screenshotAdded': 'Screenshot added',

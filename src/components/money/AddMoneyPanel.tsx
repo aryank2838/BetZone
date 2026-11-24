@@ -266,7 +266,9 @@ export default function AddMoneyPanel({
                   </a>
                 ))}
               </div>
-              <p className="text-center text-xs text-ink-muted">{t('money.appNotOpening')}</p>
+              <p className="rounded-lg bg-surface-page/60 px-3 py-2 text-center text-xs text-ink-soft">
+                {interpolate(t('money.appNotOpening'), { amount: formatNumber(amountValue) })}
+              </p>
             </div>
           </div>
         )}

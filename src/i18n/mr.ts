@@ -375,7 +375,7 @@ const mr: Record<keyof typeof en, string> = {
   'money.copied': 'कॉपी झाले',
   'money.payExactly': '{name} ला अगदी ₹{amount} पाठवा',
   'money.otherApp': 'BHIM / इतर अ‍ॅप',
-  'money.appNotOpening': 'अ‍ॅप उघडले नाही तर UPI ID कॉपी करा आणि तुमच्या UPI अ‍ॅपमधून पेमेंट करा.',
+  'money.appNotOpening': 'अ‍ॅप उघडत नाही, किंवा "bank limit exceeded" / पेमेंट फेल दिसत आहे? तुमचे पैसे कापले गेलेले नाहीत. वरचा UPI ID कॉपी करा, तुमचे UPI अ‍ॅप उघडा, "Pay to UPI ID" निवडा आणि ₹{amount} स्वतः टाका.',
   'money.screenshot': 'पेमेंटचा स्क्रीनशॉट',
   'money.removeScreenshot': 'स्क्रीनशॉट काढा',
   'money.screenshotAdded': 'स्क्रीनशॉट जोडला',
