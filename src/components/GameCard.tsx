@@ -7,6 +7,7 @@ import { gameLook } from '@/lib/gameLook';
 import { formatHolidayDate, isoWeekday, weekdayNames } from '@/lib/holiday';
 import CountdownAnnouncement from '@/components/CountdownAnnouncement';
 import PastResults from '@/components/PastResults';
+import { resultSignature } from '@/lib/resultReveal';
 import Badge, { type BadgeTone } from '@/components/ui/Badge';
 import { buttonClasses } from '@/components/ui/buttonClasses';
 import { interpolate, useT } from '@/i18n/useT';
@@ -18,8 +19,31 @@ const PILL: Partial<Record<GamePhase, { tone: BadgeTone; label: TranslationKey }
   later: { tone: 'neutral', label: 'game.phaseLater' },
 };
 
+/** Each character of the result, so a new result can flip in one digit at a time. */
+function resultTokens(result: GameResult): { text: string; className: string }[] {
+  const patti = (value: string | null) => (value ?? '***').split('').map((text) => ({ text, className: value ? '' : 'text-ink-muted' }));
+  const dash = { text: '-', className: 'px-0.5 text-ink-muted' };
+  return [
+    ...patti(result.open_patti),
+    dash,
+    { text: result.open_digit ?? '*', className: result.open_digit ? 'text-brand-400' : 'text-ink-muted' },
+    { text: result.close_digit ?? '*', className: result.close_digit ? 'text-accent-400' : 'text-ink-muted' },
+    dash,
+    ...patti(result.close_patti),
+  ];
+}
+
 /** Patti-jodi-patti on one line, e.g. 128-14-356, with the open digit green and the close digit cyan. */
-function InlineResult({ result, className = '' }: { result: GameResult; className?: string }) {
+function InlineResult({ result, className = '', reveal = false }: { result: GameResult; className?: string; reveal?: boolean }) {
+  if (reveal) {
+    return (
+      <span className={`whitespace-nowrap font-bold tabular-nums tracking-wide text-ink-strong [perspective:400px] ${className}`}>
+        {resultTokens(result).map((token, index) => (
+          <span key={index} className={`result-flip ${token.className}`} style={{ animationDelay: `${index * 0.15}s` }}>{token.text}</span>
+        ))}
+      </span>
+    );
+  }
   return (
     <span className={`whitespace-nowrap font-bold tabular-nums tracking-wide text-ink-strong ${className}`}>
       {result.open_patti ?? '***'}
@@ -45,7 +69,7 @@ function GameIcon({ game, small }: { game: string; small?: boolean }) {
   );
 }
 
-export default function GameCard({ status, phase, result, nowMs, disabled, onOpen, onOpenChart }: {
+export default function GameCard({ status, phase, result, nowMs, disabled, onOpen, onOpenChart, reveal = false }: {
   status: GameStatus;
   phase: GamePhase;
   result: GameResult | null | undefined;
@@ -53,6 +77,8 @@ export default function GameCard({ status, phase, result, nowMs, disabled, onOpe
   disabled?: boolean;
   onOpen: () => void;
   onOpenChart?: () => void;
+  /** The result was just declared: flip it in and mark it New. */
+  reveal?: boolean;
 }) {
   const { t, language } = useT();
   const name = status.label || GAME_LABELS[status.game];
@@ -171,10 +197,14 @@ export default function GameCard({ status, phase, result, nowMs, disabled, onOpe
           })}
         </ul>
 
-        <div className="flex items-center justify-between gap-3 rounded-control border border-surface-border bg-surface-page/60 px-3 py-2.5">
-          <span className="text-xs text-ink-muted">{resultLabel}</span>
+        <div className={`flex items-center justify-between gap-3 rounded-control border border-surface-border bg-surface-page/60 px-3 py-2.5 ${reveal && hasResult ? 'result-new' : ''}`}>
+          <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+            {resultLabel}
+            {reveal && hasResult && <span className="rounded-full bg-amber-500/20 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-amber-300">{t('reveal.new')}</span>}
+          </span>
           {result && hasResult
-            ? <InlineResult result={result} className="text-xl" />
+            // Keyed by the result, so the flip plays again when the close result follows the open one.
+            ? <InlineResult key={resultSignature(result)} result={result} className="text-xl" reveal={reveal} />
             : <span className="text-sm text-ink-soft">{t('dashboard.resultsPending')}</span>}
         </div>
 

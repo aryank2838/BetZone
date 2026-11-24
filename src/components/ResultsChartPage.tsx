@@ -16,6 +16,8 @@ import { localeFor } from '@/i18n/context';
 const HISTORY_SIZE = 100;
 const WINDOWS = [30, 60, 100] as const;
 type ChartTab = 'jodi' | 'stats';
+/** Columns in the jodi chart: Monday to Saturday. */
+const CHART_DAYS = 6;
 
 export default function ResultsChartPage({ game, onBack }: { game: Game; onBack: () => void }) {
   const { t, language } = useT();
@@ -47,7 +49,8 @@ export default function ResultsChartPage({ game, onBack }: { game: Game; onBack:
 
   useEffect(() => { void load(); }, [load]);
 
-  const weekdays = useMemo(() => Array.from({ length: 7 }, (_, index) =>
+  // Monday to Saturday: no game has results on Sunday.
+  const weekdays = useMemo(() => Array.from({ length: CHART_DAYS }, (_, index) =>
     // 2026-11-16 is a Monday.
     new Date(Date.UTC(2026, 10, 16 + index)).toLocaleDateString(locale, { weekday: 'short', timeZone: 'UTC' })), [locale]);
 
@@ -119,48 +122,75 @@ function JodiChart({ rows, weekdays, locale }: { rows: ResultRow[]; weekdays: st
   const { t } = useT();
   const weeks = useMemo(() => weeklyChart(rows), [rows]);
   const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const addDays = (iso: string, days: number) => {
+    const date = new Date(`${iso}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  };
 
   return (
-    <Card className="!p-3 sm:!p-4">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[340px] border-separate border-spacing-1 text-center tabular-nums">
-          <caption className="sr-only">{t('chart.tabJodi')}</caption>
-          <thead>
-            <tr className="text-[11px] font-semibold uppercase text-ink-muted">
-              <th scope="col" className="px-1 py-1 text-left font-semibold">{t('chart.week')}</th>
-              {weekdays.map((day) => <th key={day} scope="col" className="py-1 font-semibold">{day}</th>)}
+    <Card className="!p-2 sm:!p-4">
+      {/* Fixed layout: six equal columns that always fit the screen, no sideways scroll. */}
+      <table className="w-full table-fixed border-separate border-spacing-[3px] text-center tabular-nums sm:border-spacing-1">
+        <caption className="sr-only">{t('chart.tabJodi')}</caption>
+        <thead>
+          <tr className="text-[11px] font-semibold uppercase text-ink-muted">
+            {weekdays.map((day) => <th key={day} scope="col" className="py-1 font-semibold">{day}</th>)}
+          </tr>
+        </thead>
+        {weeks.map((week) => (
+          <tbody key={week.start}>
+            <tr>
+              <th scope="colgroup" colSpan={CHART_DAYS} className="px-1 pb-0.5 pt-2 text-left text-xs font-semibold text-ink-soft">
+                {shortDate(week.start)} – {shortDate(addDays(week.start, CHART_DAYS - 1))}
+              </th>
             </tr>
-          </thead>
-          <tbody>
-            {weeks.map((week) => (
-              <tr key={week.start}>
-                <th scope="row" className="whitespace-nowrap px-1 text-left text-[11px] font-medium text-ink-muted">{shortDate(week.start)}</th>
-                {week.days.map((day, index) => {
-                  const jodi = day?.jodi ?? (day?.open_digit ? `${day.open_digit}*` : null);
-                  const double = isDoubleJodi(day?.jodi ?? null);
-                  return (
-                    <td
-                      key={index}
-                      title={day ? `${shortDate(day.round_date)}: ${day.open_patti ?? '***'}-${jodi ?? '**'}-${day.close_patti ?? '***'}` : undefined}
-                      className={`h-10 rounded-md text-[15px] font-bold ${!day
-                        ? 'bg-surface-page/40 text-surface-strong'
-                        : double
-                          ? 'bg-rose-950/60 text-rose-300 ring-1 ring-rose-800/70'
-                          : 'bg-surface-raised/70 text-ink-strong'}`}
-                    >
-                      {jodi ?? (day ? '**' : '·')}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            <tr>
+              {week.days.slice(0, CHART_DAYS).map((day, index) => <ChartCell key={index} day={day} label={day ? shortDate(day.round_date) : ''} />)}
+            </tr>
           </tbody>
-        </table>
-      </div>
+        ))}
+      </table>
+      <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-ink-muted">
+        <span>{t('chart.pattiNote')}</span>
+      </p>
       <p className="mt-2 flex items-center gap-1.5 px-1 text-[11px] text-ink-muted">
         <span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-900 ring-1 ring-rose-700" aria-hidden="true" /> {t('chart.doubleNote')}
       </p>
     </Card>
+  );
+}
+
+/** A patti read top to bottom, e.g. 1-2-5 stacked. Keeps its width when empty so jodis line up. */
+function StackedPatti({ patti }: { patti: string | null }) {
+  return (
+    <span className="flex w-[7px] flex-col text-[10px] font-semibold leading-[1.15] text-ink-muted sm:w-2.5 sm:text-xs" aria-hidden="true">
+      {(patti ?? '   ').split('').map((digit, index) => <span key={index}>{digit.trim() || ' '}</span>)}
+    </span>
+  );
+}
+
+function ChartCell({ day, label }: { day: ResultRow | null; label: string }) {
+  if (!day) {
+    return <td className="h-12 rounded-md bg-surface-page/40 text-surface-strong sm:h-14">·</td>;
+  }
+  const double = isDoubleJodi(day.jodi);
+  const spoken = `${label}: ${day.open_patti ?? '***'} ${day.open_digit ?? '*'}${day.close_digit ?? '*'} ${day.close_patti ?? '***'}`;
+  return (
+    <td
+      title={spoken}
+      aria-label={spoken}
+      className={`h-12 rounded-md px-0.5 sm:h-14 ${double ? 'bg-rose-950/60 ring-1 ring-rose-800/70' : 'bg-surface-raised/70'}`}
+    >
+      <div className="flex items-center justify-between">
+        <StackedPatti patti={day.open_patti} />
+        <span className={`text-[15px] font-extrabold leading-none sm:text-lg ${double ? 'text-rose-300' : ''}`} aria-hidden="true">
+          <span className={double ? '' : 'text-brand-400'}>{day.open_digit ?? '*'}</span>
+          <span className={double ? '' : day.close_digit ? 'text-accent-400' : 'text-ink-muted'}>{day.close_digit ?? '*'}</span>
+        </span>
+        <StackedPatti patti={day.close_patti} />
+      </div>
+    </td>
   );
 }
 

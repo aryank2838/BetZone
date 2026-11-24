@@ -14,7 +14,9 @@ export type PushKind =
   | 'admin_deposit'
   | 'admin_withdrawal'
   | 'admin_waiting'
-  | 'admin_test';
+  | 'admin_test'
+  // Nightly summary: amount = total staked, reason = 'p=<paid>;d=<deposits>;w=<withdrawals>;n=<new players>'.
+  | 'admin_daily_summary';
 
 export type PushLanguage = 'en' | 'hi' | 'mr';
 
@@ -78,6 +80,10 @@ const TEXT: Record<PushLanguage, Record<PushKind, Template>> = {
       bodyWithReason: '{count} waiting · oldest for {reason} min. Tap to review.',
     },
     admin_test: { title: 'Admin alerts are working ✅', body: 'You will get a notification like this for every new request.' },
+    admin_daily_summary: {
+      title: 'Day summary · {result}',
+      body: 'Bets ₹{amount} · Paid ₹{paid} · Added ₹{deposits} · Withdrawn ₹{withdrawals} · {players} new players',
+    },
   },
   hi: {
     deposit_approved: { title: 'पैसे जुड़ गए', body: '₹{amount} आपके BetZone बैलेंस में जुड़ गए हैं।' },
@@ -119,6 +125,10 @@ const TEXT: Record<PushLanguage, Record<PushKind, Template>> = {
       bodyWithReason: '{count} अनुरोध इंतज़ार में · सबसे पुराना {reason} मिनट से। देखने के लिए टैप करें।',
     },
     admin_test: { title: 'एडमिन अलर्ट चालू हैं ✅', body: 'हर नए अनुरोध पर आपको ऐसा नोटिफ़िकेशन मिलेगा।' },
+    admin_daily_summary: {
+      title: 'दिन का हिसाब · {result}',
+      body: 'बेट ₹{amount} · जीत में दिए ₹{paid} · जमा ₹{deposits} · निकासी ₹{withdrawals} · {players} नए प्लेयर',
+    },
   },
   mr: {
     deposit_approved: { title: 'पैसे जोडले गेले', body: '₹{amount} तुमच्या BetZone बॅलन्समध्ये जोडले गेले आहेत.' },
@@ -160,6 +170,10 @@ const TEXT: Record<PushLanguage, Record<PushKind, Template>> = {
       bodyWithReason: '{count} विनंत्या प्रलंबित · सर्वात जुनी {reason} मिनिटांपासून. पाहण्यासाठी टॅप करा.',
     },
     admin_test: { title: 'अ‍ॅडमिन अलर्ट सुरू आहेत ✅', body: 'प्रत्येक नव्या विनंतीसाठी तुम्हाला असे नोटिफिकेशन येईल.' },
+    admin_daily_summary: {
+      title: 'दिवसाचा हिशोब · {result}',
+      body: 'बेट ₹{amount} · जिंकलेले दिले ₹{paid} · जमा ₹{deposits} · काढले ₹{withdrawals} · {players} नवे प्लेयर',
+    },
   },
 };
 
@@ -175,6 +189,7 @@ const URLS: Record<PushKind, string> = {
   admin_withdrawal: '/?open=admin-requests',
   admin_waiting: '/?open=admin-requests',
   admin_test: '/?open=admin-requests',
+  admin_daily_summary: '/?open=admin-requests',
 };
 
 /** How long a push service keeps trying to deliver, by kind. */
@@ -182,7 +197,7 @@ export function ttlSeconds(kind: PushKind): number {
   // A match reminder is useless after kick-off; a "still waiting" reminder is
   // replaced by the next one 30 minutes later.
   if (kind === 'match_starting' || kind === 'admin_waiting' || kind === 'admin_test') return 30 * 60;
-  if (kind === 'winnings' || kind === 'admin_deposit' || kind === 'admin_withdrawal') return 6 * 60 * 60;
+  if (kind === 'winnings' || kind === 'admin_deposit' || kind === 'admin_withdrawal' || kind === 'admin_daily_summary') return 6 * 60 * 60;
   return 24 * 60 * 60;
 }
 
@@ -198,7 +213,41 @@ export function normalizeLanguage(value: string | null | undefined): PushLanguag
   return value === 'hi' || value === 'mr' ? value : 'en';
 }
 
+const PROFIT_WORDS: Record<PushLanguage, { profit: string; loss: string }> = {
+  en: { profit: 'Profit', loss: 'Loss' },
+  hi: { profit: 'मुनाफ़ा', loss: 'घाटा' },
+  mr: { profit: 'नफा', loss: 'तोटा' },
+};
+
+/** Reads 'p=8000;d=5000;w=2000;n=3' from the nightly summary. Missing parts count as 0. */
+export function parseSummary(reason: string | null): { paid: number; deposits: number; withdrawals: number; players: number } {
+  const parts = new Map<string, number>();
+  for (const piece of (reason ?? '').split(';')) {
+    const [key, value] = piece.split('=');
+    const number = Number(value);
+    if (key && Number.isFinite(number)) parts.set(key.trim(), number);
+  }
+  return { paid: parts.get('p') ?? 0, deposits: parts.get('d') ?? 0, withdrawals: parts.get('w') ?? 0, players: parts.get('n') ?? 0 };
+}
+
+function summaryMessage(staked: number, reason: string | null, language: PushLanguage): PushMessage {
+  const template = TEXT[language].admin_daily_summary;
+  const { paid, deposits, withdrawals, players } = parseSummary(reason);
+  const profit = staked - paid;
+  const words = PROFIT_WORDS[language];
+  const values = {
+    result: `${profit >= 0 ? words.profit : words.loss} ₹${formatRupees(Math.abs(profit))}`,
+    amount: formatRupees(staked),
+    paid: formatRupees(paid),
+    deposits: formatRupees(deposits),
+    withdrawals: formatRupees(withdrawals),
+    players: String(Math.max(0, Math.round(players))),
+  };
+  return { title: fill(template.title, values), body: fill(template.body, values), url: URLS.admin_daily_summary, tag: 'admin_daily_summary' };
+}
+
 export function buildMessage(kind: PushKind, amount: number, reason: string | null, language: PushLanguage): PushMessage {
+  if (kind === 'admin_daily_summary') return summaryMessage(amount, reason, language);
   const template = TEXT[language][kind];
   const trimmedReason = reason?.trim().slice(0, 120) ?? '';
   const values = { amount: formatRupees(amount), count: String(Math.max(0, Math.round(amount))), reason: trimmedReason };

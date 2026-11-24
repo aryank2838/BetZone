@@ -18,6 +18,18 @@ describe('push messages', () => {
       .toBe('₹500 जोडण्याची तुमची विनंती नामंजूर झाली. कारण पाहण्यासाठी BetZone उघडा.');
   });
 
+  it('sums up the day for admins with profit or loss', () => {
+    expect(buildMessage('admin_daily_summary', 12000, 'p=8000;d=5000;w=2000;n=3', 'en')).toEqual({
+      title: 'Day summary · Profit ₹4,000',
+      body: 'Bets ₹12,000 · Paid ₹8,000 · Added ₹5,000 · Withdrawn ₹2,000 · 3 new players',
+      url: '/?open=admin-requests',
+      tag: 'admin_daily_summary',
+    });
+    expect(buildMessage('admin_daily_summary', 1000, 'p=2500;d=0;w=0;n=0', 'en').title).toBe('Day summary · Loss ₹1,500');
+    expect(buildMessage('admin_daily_summary', 1000, 'p=2500;d=0;w=0;n=0', 'hi').title).toBe('दिन का हिसाब · घाटा ₹1,500');
+    expect(buildMessage('admin_daily_summary', 0, null, 'mr').title).toBe('दिवसाचा हिशोब · नफा ₹0');
+  });
+
   it('opens My bets for winnings', () => {
     expect(buildMessage('winnings', 900, null, 'en').url).toBe('/?open=bets');
   });

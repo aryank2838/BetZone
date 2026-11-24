@@ -18,6 +18,8 @@ import MoneyNotices from '@/components/MoneyNotices';
 import InstallBanner from '@/components/InstallBanner';
 import HelpButton from '@/components/HelpButton';
 import WinnersTicker from '@/components/WinnersTicker';
+import WinCelebration from '@/components/WinCelebration';
+import { findNewResults, readSeenResults, saveSeenResults } from '@/lib/resultReveal';
 import { useMoneyNotices, useNoticeText, type MoneyNotice } from '@/lib/useMoneyNotices';
 import { useToast } from '@/components/ui/toastContext';
 import type { AdminTab } from '@/components/AdminPanel';
@@ -212,6 +214,9 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
   const [results, setResults] = useState<Partial<Record<Game, GameResult | null>>>({});
   const [resultsError, setResultsError] = useState<{ message: string; raw?: string } | null>(null);
   const [resultsRefresh, setResultsRefresh] = useState(0);
+  // Games whose result was declared since this device last looked: they flip in and show "New".
+  const [revealing, setRevealing] = useState<Set<string>>(() => new Set());
+  const [winCheck, setWinCheck] = useState(0);
   const { limits } = useMyLimits();
   const restriction = activePlayRestriction(limits);
   const [gameFilter, setGameFilter] = useState<'all' | 'open'>('all');
@@ -239,12 +244,17 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
           if (active) setResultsError({ message: friendly.message, raw: friendly.raw });
           return;
         }
-        const byGame = Object.fromEntries(
-          ((data as GameResult[] | null) ?? []).map((result) => [result.game, result])
-        ) as Partial<Record<Game, GameResult | null>>;
+        const list = (data as GameResult[] | null) ?? [];
+        const byGame = Object.fromEntries(list.map((result) => [result.game, result])) as Partial<Record<Game, GameResult | null>>;
         if (active) {
+          const seen = readSeenResults();
+          const { fresh, next } = findNewResults(list, seen, Date.now());
+          saveSeenResults(next);
+          if (fresh.length > 0) setRevealing((current) => new Set([...current, ...fresh]));
           setResults(byGame);
           setResultsError(null);
+          // A changed result may have paid the player: look for a win to celebrate.
+          if (list.some((result) => seen[result.game] !== next[result.game])) setWinCheck((value) => value + 1);
         }
       } catch (error) {
         const friendly = friendlyErrorDetails(error);
@@ -294,6 +304,7 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
 
       <main className="relative z-10 mx-auto max-w-2xl space-y-6 px-4 py-6 sm:px-5">
         {profile?.is_admin && <AdminHomeCard statuses={gameStatuses} onOpen={onOpenAdmin} />}
+        {user && <WinCelebration checkKey={winCheck} onViewBets={() => onNavigate('mybets')} />}
         <MoneyNotices notices={notices} onDismiss={onDismissNotices} onOpenHistory={onOpenHistory} />
         {gameStatusError && (
           <Alert details={gameStatusErrorDetails} onRetry={() => void refreshGameStatus()}>
@@ -390,6 +401,7 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
                     disabled={profile?.is_banned}
                     onOpen={() => onNavigate('game', status.game)}
                     onOpenChart={() => onNavigate('charts', status.game)}
+                    reveal={revealing.has(status.game)}
                   />
                 </div>
               ));
