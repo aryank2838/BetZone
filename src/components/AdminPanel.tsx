@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
-  Loader2, Trophy, Users, Wallet, BarChart3, X, ListChecks, Settings, MoreHorizontal, LifeBuoy, FileText,
+  Loader2, Trophy, Users, Wallet, BarChart3, X, ListChecks, Settings, MoreHorizontal, LifeBuoy, FileText, Handshake,
 } from 'lucide-react';
 import { BET_TYPES, GAME_LABELS, isValidPatti, pattiDigit, type BetType, type Game, type GameResult } from '@/types';
 import { useGameStatus } from '@/lib/useGameStatus';
@@ -16,6 +16,7 @@ import SupportTab from '@/components/admin/SupportTab';
 import HelpButton from '@/components/HelpButton';
 import ReportsTab from '@/components/admin/ReportsTab';
 import SportsTab from '@/components/admin/SportsTab';
+import PartnersTab from '@/components/admin/PartnersTab';
 import UserDetail from '@/components/admin/UserDetail';
 import { useDialogA11y } from '@/lib/useDialogA11y';
 import { useFormat } from '@/i18n/useFormat';
@@ -33,7 +34,7 @@ import { phaseState, type RoundResult } from '@/components/admin/resultPhase';
 import { formatClockTime } from '@/lib/countdown';
 import { currentResultRound } from '@/lib/adminOverview';
 
-export type AdminTab = 'results' | 'requests' | 'users' | 'selections' | 'stats' | 'settings' | 'support' | 'reports' | 'sports';
+export type AdminTab = 'results' | 'requests' | 'users' | 'selections' | 'stats' | 'settings' | 'support' | 'reports' | 'sports' | 'partners';
 
 interface AdminPanelProps {
   onBack: () => void;
@@ -198,6 +199,7 @@ const MORE_TABS: Array<{ id: Tab; label: string; icon: typeof BarChart3 }> = [
   { id: 'stats', label: 'Overview', icon: BarChart3 },
   { id: 'selections', label: 'Bets', icon: ListChecks },
   { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'partners', label: 'Partners', icon: Handshake },
   { id: 'sports', label: 'Sports', icon: Trophy },
   { id: 'support', label: 'Support', icon: LifeBuoy },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -1049,6 +1051,7 @@ export default function AdminPanel({ onBack, initialTab = 'requests', initialGam
         {tab === 'support' && <SupportTab />}
         {tab === 'reports' && <ReportsTab />}
         {tab === 'sports' && <SportsTab />}
+        {tab === 'partners' && <PartnersTab />}
       </main>
 
       {tab === 'users' && detailUser && (

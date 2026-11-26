@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { BookOpen, ChevronRight, FileText, LogOut, Mail, Shield, ShieldCheck, Lock } from 'lucide-react';
+import { BookOpen, ChevronRight, FileText, Handshake, LogOut, Mail, Shield, ShieldCheck, Lock } from 'lucide-react';
+import { useIsPartner } from '@/lib/partner';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
@@ -43,6 +44,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (view: NavVie
   const [error, setError] = useState<{ text: string; raw?: string } | null>(null);
   const { t } = useT();
   const toast = useToast();
+  const isPartner = useIsPartner(profile?.id, Boolean(profile && !profile.is_admin));
 
   const saveName = async () => {
     if (!user || !name.trim() || name.trim().length > 50) { setError({ text: t('settings.nameLength') }); return; }
@@ -115,6 +117,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (view: NavVie
             <LinkRow icon={<FileText className="h-4 w-4" />} label={t('dashboard.terms')} onClick={() => onNavigate('terms')} />
             <LinkRow icon={<Lock className="h-4 w-4" />} label={t('dashboard.privacy')} onClick={() => onNavigate('privacy')} />
             <LinkRow icon={<Mail className="h-4 w-4" />} label={t('dashboard.contact')} onClick={() => onNavigate('contact')} />
+            {isPartner && (
+              <LinkRow icon={<Handshake className="h-4 w-4 text-amber-400" />} label={t('partner.title')} onClick={() => onNavigate('partner')} tone="admin" />
+            )}
             {profile?.is_admin && (
               <LinkRow icon={<Shield className="h-4 w-4 text-amber-400" />} label={t('dashboard.adminPanel')} onClick={() => onNavigate('admin')} tone="admin" />
             )}

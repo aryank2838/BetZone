@@ -33,7 +33,8 @@ import { useMyLimits, activePlayRestriction, formatLimitEnd } from '@/lib/useMyL
 import { CardSkeleton } from '@/components/Skeleton';
 import { interpolate, useT } from '@/i18n/useT';
 import { useFormat } from '@/i18n/useFormat';
-import { ChevronRight, Loader2, Plus, User, Wallet, Zap } from 'lucide-react';
+import { ChevronRight, Handshake, Loader2, Plus, User, Wallet, Zap } from 'lucide-react';
+import { useIsPartner } from '@/lib/partner';
 
 // Pages other than Home load on first use, so the first screen downloads less.
 const AdminPanel = lazy(() => import('@/components/AdminPanel'));
@@ -45,6 +46,7 @@ const RulesPage = lazy(() => import('@/components/RulesPage'));
 const SettingsPage = lazy(() => import('@/components/SettingsPage'));
 const SportsPage = lazy(() => import('@/components/SportsPage'));
 const ResultsChartPage = lazy(() => import('@/components/ResultsChartPage'));
+const PartnerPage = lazy(() => import('@/components/PartnerPage'));
 
 function PageLoading() {
   const { t } = useT();
@@ -158,6 +160,7 @@ function DashboardContent({ nav, navigate, goHome, adminTarget, openAdmin }: {
       </Suspense>
     );
   }
+  if (nav.view === 'partner' && user) return <Suspense fallback={<PageLoading />}><PartnerPage onBack={() => goHome()} /></Suspense>;
   if (nav.view === 'limits' && user) return <Suspense fallback={<PageLoading />}><PlayLimitsPage onBack={backToAccount} /></Suspense>;
   if (nav.view === 'rules') return <Suspense fallback={<PageLoading />}><RulesPage onBack={backToAccount} /></Suspense>;
   if (nav.view === 'terms' || nav.view === 'privacy' || nav.view === 'contact') {
@@ -220,7 +223,9 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
   const { limits } = useMyLimits();
   const restriction = activePlayRestriction(limits);
   const [gameFilter, setGameFilter] = useState<'all' | 'open'>('all');
-  const referral = useMyReferral(Boolean(profile && !profile.is_admin));
+  const isPartner = useIsPartner(profile?.id, Boolean(profile && !profile.is_admin));
+  // Partners earn a profit share instead of the friend bonus, so they do not see the invite-a-friend card.
+  const referral = useMyReferral(Boolean(profile && !profile.is_admin && !isPartner));
   const openReferral = () => {
     const card = document.getElementById(REFERRAL_CARD_ID);
     if (!card) return;
@@ -304,6 +309,22 @@ function Home({ onNavigate, onOpenAdmin, notices, onDismissNotices, onOpenHistor
 
       <main className="relative z-10 mx-auto max-w-2xl space-y-6 px-4 py-6 sm:px-5">
         {profile?.is_admin && <AdminHomeCard statuses={gameStatuses} onOpen={onOpenAdmin} />}
+        {isPartner && (
+          <button
+            type="button"
+            onClick={() => onNavigate('partner')}
+            className="flex w-full items-center gap-3 rounded-card border border-amber-500/40 bg-gradient-to-br from-amber-950/60 to-surface-raised/60 px-4 py-3 text-left hover:border-amber-400"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-amber-500/20 text-amber-300" aria-hidden="true">
+              <Handshake className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-ink-strong">{t('partner.homeCard')}</span>
+              <span className="block text-xs text-ink-muted">{t('partner.inviteTitle')}</span>
+            </span>
+            <ChevronRight className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+          </button>
+        )}
         {user && <WinCelebration checkKey={winCheck} onViewBets={() => onNavigate('mybets')} />}
         <MoneyNotices notices={notices} onDismiss={onDismissNotices} onOpenHistory={onOpenHistory} />
         {gameStatusError && (

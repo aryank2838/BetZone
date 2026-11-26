@@ -28,6 +28,43 @@ export function useNoticeText() {
 }
 const COLUMNS = 'id, amount, status, reject_reason, processed_at';
 
+/** Push tags of the money notifications (see send-push/messages.ts). */
+const MONEY_PUSH_TAGS = new Set(['deposit_approved', 'deposit_rejected', 'withdrawal_approved', 'withdrawal_rejected']);
+
+/**
+ * Removes this app's money notifications from the phone's notification tray.
+ * Called when the app is opened: the Home card shows the same news, so a
+ * notification the player never tapped should not stay in the tray.
+ */
+export async function clearMoneyNotifications(): Promise<void> {
+  try {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration?.getNotifications) return;
+    const shown = await registration.getNotifications();
+    for (const notification of shown) {
+      if (notification.tag && MONEY_PUSH_TAGS.has(notification.tag)) notification.close();
+    }
+  } catch { /* the tray is best effort */ }
+}
+
+const dismissedKey = (userId: string) => `betzone_notices_dismissed_${userId}`;
+
+function readDismissed(userId: string): string | null {
+  try { return localStorage.getItem(dismissedKey(userId)); } catch { return null; }
+}
+
+function saveDismissed(userId: string, until: string) {
+  try { localStorage.setItem(dismissedKey(userId), until); } catch { /* private mode */ }
+}
+
+/** Later of two ISO times (null-safe). */
+function laterOf(a: string | null | undefined, b: string | null | undefined): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a;
+  return Date.parse(a) >= Date.parse(b) ? a : b;
+}
+
 /** Newest first, one entry per request. */
 export function mergeNotices(deposits: NoticeRow[], withdrawals: NoticeRow[]): MoneyNotice[] {
   return [
@@ -54,8 +91,15 @@ export function useMoneyNotices(onNew?: (notices: MoneyNotice[]) => void) {
   const load = useCallback(async () => {
     if (!userId) return;
     const profile = await supabase.from('profiles').select('money_notices_seen_at').eq('id', userId).maybeSingle();
-    const seenAt = (profile.data as { money_notices_seen_at?: string } | null)?.money_notices_seen_at;
-    if (profile.error || !seenAt) return;
+    const serverSeenAt = (profile.data as { money_notices_seen_at?: string } | null)?.money_notices_seen_at;
+    if (profile.error || !serverSeenAt) return;
+    // A dismissal on this phone that the server did not save (bad network) still counts,
+    // and is sent again so other devices catch up.
+    const localSeenAt = readDismissed(userId);
+    const seenAt = laterOf(serverSeenAt, localSeenAt) ?? serverSeenAt;
+    if (localSeenAt && seenAt !== serverSeenAt) {
+      void supabase.rpc('mark_money_notices_seen', { p_until: localSeenAt });
+    }
     const [deposits, withdrawals] = await Promise.all([
       supabase.from('add_funds_requests').select(COLUMNS).eq('user_id', userId)
         .in('status', ['approved', 'rejected']).gt('processed_at', seenAt).order('processed_at', { ascending: false }).limit(20),
@@ -63,7 +107,10 @@ export function useMoneyNotices(onNew?: (notices: MoneyNotice[]) => void) {
         .in('status', ['approved', 'rejected']).gt('processed_at', seenAt).order('processed_at', { ascending: false }).limit(20),
     ]);
     if (deposits.error || withdrawals.error) return;
-    const next = mergeNotices((deposits.data ?? []) as NoticeRow[], (withdrawals.data ?? []) as NoticeRow[]);
+    // A load that started before the player tapped "Got it" must not bring the card back.
+    const dismissedUntil = readDismissed(userId);
+    const next = mergeNotices((deposits.data ?? []) as NoticeRow[], (withdrawals.data ?? []) as NoticeRow[])
+      .filter((notice) => !dismissedUntil || Date.parse(notice.processed_at) > Date.parse(dismissedUntil));
     const previous = known.current;
     known.current = new Set(next.map((notice) => `${notice.kind}:${notice.id}`));
     if (previous) {
@@ -80,11 +127,16 @@ export function useMoneyNotices(onNew?: (notices: MoneyNotice[]) => void) {
     known.current = null;
     setNotices([]);
     void load();
+    void clearMoneyNotifications();
   }, [load]);
 
   useEffect(() => {
     if (!userId) return;
-    const onVisible = () => { if (document.visibilityState === 'visible') void load(); };
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      void load();
+      void clearMoneyNotifications();
+    };
     document.addEventListener('visibilitychange', onVisible);
     const filter = `user_id=eq.${userId}`;
     const channel = supabase
@@ -101,10 +153,17 @@ export function useMoneyNotices(onNew?: (notices: MoneyNotice[]) => void) {
   const dismiss = useCallback(async () => {
     const newest = notices[0]?.processed_at;
     setNotices([]);
-    if (!newest) return;
-    const { error } = await supabase.rpc('mark_money_notices_seen', { p_until: newest });
-    if (error) console.error('Could not save that money notices were seen', error);
-  }, [notices]);
+    void clearMoneyNotifications();
+    if (!newest || !userId) return;
+    // Saved on the phone first, so the card stays gone even if the server call fails.
+    saveDismissed(userId, laterOf(readDismissed(userId), newest) ?? newest);
+    try {
+      const { error } = await supabase.rpc('mark_money_notices_seen', { p_until: newest });
+      if (error) console.error('Could not save that money notices were seen', error);
+    } catch (error) {
+      console.error('Could not save that money notices were seen', error);
+    }
+  }, [notices, userId]);
 
   return { notices, dismiss };
 }
