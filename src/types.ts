@@ -89,6 +89,8 @@ export interface SavedSelection {
   bet_type: BetType;
   selections: SelectionEntry[];
   total_points: number;
+  /** Free stake from slip commission, already included in total_points. */
+  commission_points?: number;
   updated_at: string;
 }
 

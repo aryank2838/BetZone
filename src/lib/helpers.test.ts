@@ -29,7 +29,12 @@ describe('bet limits from get_public_rules (B8)', () => {
       minimum_withdrawal: 100, maximum_withdrawal: 100000, approved_deposit_minimum: 100,
       maximum_add_funds: 100000, turnover_multiplier: 1, maximum_bet: 2500, maximum_submit: 9000,
     });
-    expect(limits).toEqual({ maxPerBet: 2500, maxPerSubmit: 9000, quickStakes: QUICK_STAKES });
+    expect(limits).toEqual({ maxPerBet: 2500, maxPerSubmit: 9000, quickStakes: QUICK_STAKES, commissionPer100: 0 });
+    expect(betLimitsFromRules({
+      minimum_withdrawal: 100, maximum_withdrawal: 100000, approved_deposit_minimum: 100,
+      maximum_add_funds: 100000, turnover_multiplier: 1, maximum_bet: 2500, maximum_submit: 9000,
+      commission_per_100: 5,
+    }).commissionPer100).toBe(5);
     expect(betLimitsFromRules(null)).toBe(FALLBACK_BET_LIMITS);
   });
 });

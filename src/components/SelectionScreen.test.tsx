@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SelectionScreen from '@/components/SelectionScreen';
+import { resetPublicRulesCache } from '@/lib/betLimits';
 
 const { rpcMock, supabaseFromMock } = vi.hoisted(() => ({
   rpcMock: vi.fn(),
@@ -58,6 +59,7 @@ function makeSelectionQuery() {
 
 afterEach(() => {
   cleanup();
+  resetPublicRulesCache();
   vi.clearAllMocks();
 });
 
@@ -125,6 +127,50 @@ describe('selection bet slip', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Place bets' }));
     await waitFor(() => {
       expect(within(dialog).getByRole('alert')).toHaveTextContent('Betting for this is closed right now.');
+    });
+  });
+  it('gives ₹5 free per full ₹100 on the slip and sends the chosen commission number', async () => {
+    rpcMock.mockImplementation((name: string) => {
+      if (name === 'get_public_rules') {
+        return Promise.resolve({ data: { maximum_bet: 5000, maximum_submit: 20000, commission_per_100: 5 }, error: null });
+      }
+      if (name === 'submit_selection') {
+        return Promise.resolve({ data: { new_count: 3, new_points: 150, commission: 5, commission_number: '42' }, error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+    supabaseFromMock.mockReturnValue(makeSelectionQuery());
+    render(<SelectionScreen game="test" onBack={vi.fn()} onPointsChanged={vi.fn()} onAddFunds={vi.fn()} />);
+
+    await screen.findByRole('button', { name: '00' });
+    fireEvent.change(screen.getByLabelText(/type your own amount/i), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: '00' }));
+    expect(await screen.findByText('Bet ₹50 more on this slip to get ₹5 free.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '01' }));
+    fireEvent.click(screen.getByRole('button', { name: '02' }));
+    // ₹150 still earns only ₹5.
+    expect(screen.getByText('+₹5 free commission on this slip')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Review bets/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Check your bets' });
+    expect(within(dialog).getByText('Total to pay').nextSibling).toHaveTextContent('150');
+    expect(within(dialog).getByText('Commission (free)').nextSibling).toHaveTextContent('5');
+    expect(within(dialog).getByText('Total played').nextSibling).toHaveTextContent('155');
+    // Defaults to the first slip number.
+    expect(within(dialog).getByRole('radio', { name: '00' })).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Other number' }));
+    expect(within(dialog).getByRole('button', { name: 'Place bets' })).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText('Type the number for your commission'), { target: { value: '42' } });
+    expect(within(dialog).getByText('₹5 on 42 · Win ₹450')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Place bets' }));
+
+    await waitFor(() => {
+      expect(rpcMock).toHaveBeenCalledWith('submit_selection', expect.objectContaining({
+        p_bet_type: 'jodi',
+        p_commission_number: '42',
+        p_selections: [{ number: '00', points: 50 }, { number: '01', points: 50 }, { number: '02', points: 50 }],
+      }));
     });
   });
 });

@@ -1572,7 +1572,7 @@ BEGIN
 
   -- Liability check and exposure: no hard-coded payout multipliers remain.
   FOREACH v_function IN ARRAY ARRAY[
-    'public.submit_selection(text, jsonb, text)',
+    'public.submit_selection(text, jsonb, text, text)',
     'public.admin_get_exposure(text, date)',
     'public.process_open_payouts(text, date)',
     'public.process_close_payouts(text, date)'

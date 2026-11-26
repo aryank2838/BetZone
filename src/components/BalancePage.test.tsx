@@ -85,7 +85,7 @@ describe('Money page', () => {
 
     const panel = await screen.findByRole('tabpanel');
     const send = await within(panel).findByRole('button', { name: 'Send for checking' });
-    fireEvent.change(within(panel).getByPlaceholderText('e.g. 500'), { target: { value: '10' } });
+    fireEvent.change(within(panel).getByPlaceholderText('₹ Enter amount'), { target: { value: '10' } });
     expect(within(panel).getByText(/Payment screenshot/, { selector: 'span' })).toHaveTextContent('(required)');
     expect(within(panel).getByText(/UTR number/, { selector: 'span' })).toHaveTextContent('(required)');
     expect(send).toBeDisabled();

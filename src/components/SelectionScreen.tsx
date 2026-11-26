@@ -21,8 +21,8 @@ import { useToast } from '@/components/ui/toastContext';
 import { useFormat } from '@/i18n/useFormat';
 import { interpolate, useT } from '@/i18n/useT';
 import type { TranslationKey } from '@/i18n/context';
-import { calculateBetSlip } from '@/lib/betSlip';
-import { CalendarOff, Clock, Lock, Pencil, Plus, ReceiptText, Trophy, X } from 'lucide-react';
+import { calculateBetSlip, slipCommission } from '@/lib/betSlip';
+import { CalendarOff, Clock, Gift, Lock, Pencil, Plus, ReceiptText, Trophy, X } from 'lucide-react';
 import { formatHolidayDate, isDayOff, isOnHoliday } from '@/lib/holiday';
 
 interface SelectionScreenProps {
@@ -84,6 +84,10 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
   const [manualDigit, setManualDigit] = useState('');
   const [manualPoints, setManualPoints] = useState('10');
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  // Which number gets the free commission: a slip number, 'other' (typed below), or null for the first slip number.
+  const [commissionChoice, setCommissionChoice] = useState<string | null>(null);
+  const [commissionOther, setCommissionOther] = useState('');
+  const [commissionByType, setCommissionByType] = useState<Record<string, number>>({});
   const submittingRef = useRef(false);
   const confirmationRef = useRef<HTMLElement>(null);
   const { statuses, loading: statusLoading, error: statusError, errorDetails: statusErrorDetails, nowMs, refresh } = useGameStatus();
@@ -138,9 +142,10 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
     const currentLoad = ++savedLoadId.current;
     setLoading(true);
     setLockedByType({});
+    setCommissionByType({});
     const { data, error } = await supabase
       .from('selections')
-      .select('id, game, bet_type, round_date, selections, total_points, updated_at')
+      .select('id, game, bet_type, round_date, selections, total_points, commission_points, updated_at')
       .eq('game', game)
       .eq('user_id', userId)
       .eq('round_date', roundDate);
@@ -151,14 +156,19 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
       setMessage({ text: friendly.message, raw: friendly.raw });
     } else if (data) {
       const byType: Record<string, Map<string, number>> = {};
+      const commissions: Record<string, number> = {};
       (data as SavedSelection[]).forEach((row) => {
         const entries = new Map<string, number>();
         (row.selections as SelectionEntry[]).forEach((item) => {
           entries.set(item.number, Number(item.points) || 1);
         });
         byType[row.bet_type] = entries;
+        commissions[row.bet_type] = Number(row.commission_points) || 0;
       });
-      if (currentLoad === savedLoadId.current) setLockedByType(byType);
+      if (currentLoad === savedLoadId.current) {
+        setLockedByType(byType);
+        setCommissionByType(commissions);
+      }
     }
     if (currentLoad === savedLoadId.current) setLoading(false);
   }, [game]);
@@ -195,6 +205,8 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
     setManualPatti('');
     setManualDigit('');
     setMessage(null);
+    setCommissionChoice(null);
+    setCommissionOther('');
   }, [tab]);
 
   const lockedMap = lockedByType[tab] ?? new Map<string, number>();
@@ -255,6 +267,23 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
   const insufficient = newTotal > balance;
   const invalidEntry = pendingSorted.some((p) => !validStake(p.points));
   const exceedsSubmitLimit = newTotal > betLimits.maxPerSubmit;
+  // Commission: a free stake for every full ₹100 on this slip (the server recomputes it).
+  const commissionPer100 = betLimits.commissionPer100;
+  const commission = slipCommission(newTotal, commissionPer100);
+  const commissionNudge = commissionPer100 > 0 && newTotal > 0 ? 100 - (newTotal % 100) : 0;
+  const otherCommissionValid = (() => {
+    const value = commissionOther.trim();
+    if (betInfo.inputType === 'digit') return /^\d$/.test(value);
+    if (betInfo.inputType === 'patti_combo') return isValidPattiCombo(value);
+    return /^\d{2}$/.test(value);
+  })();
+  const commissionTarget = commission <= 0
+    ? null
+    : commissionChoice === 'other'
+      ? (otherCommissionValid ? commissionOther.trim() : null)
+      : (commissionChoice && pendingSorted.some((p) => p.number === commissionChoice) ? commissionChoice : pendingSorted[0]?.number ?? null);
+  const commissionInvalid = commission > 0 && commissionTarget === null;
+  const lockedCommission = commissionByType[tab] ?? 0;
   const slipVisible = betOpen && pendingSorted.length > 0;
   const jumpToSlip = () => {
     const slip = document.getElementById('selection-slip');
@@ -273,6 +302,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
     if (exceedsSubmitLimit) { setMessage({ text: interpolate(t('betslip.submitLimit'), { max: formatNumber(betLimits.maxPerSubmit) }) }); return; }
     if (insufficient) { setMessage({ text: interpolate(t('betslip.notEnough'), { balance: formatNumber(balance), total: formatNumber(newTotal) }), action: 'add_funds' }); return; }
     if (!status || !betOpen) { setMessage({ text: t('errors.closed') }); return; }
+    if (commissionInvalid) { setMessage({ text: t('commission.otherInvalid') }); return; }
 
     setSaving(true);
     submittingRef.current = true;
@@ -283,13 +313,19 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
         p_game: game,
         p_selections: payload,
         p_bet_type: tab,
+        p_commission_number: commissionTarget,
       });
       if (error) throw error;
-      const placed = data as { new_count: number; new_points: number };
+      const placed = data as { new_count: number; new_points: number; commission?: number; commission_number?: string | null };
       await loadSaved(profile.id, status.round_date);
       setPending([]);
+      setCommissionChoice(null);
+      setCommissionOther('');
       setConfirmationOpen(false);
-      toast.show(interpolate(t('bet.placed'), { count: placed.new_count, amount: rupees(placed.new_points) }));
+      const placedText = interpolate(t('bet.placed'), { count: placed.new_count, amount: rupees(placed.new_points) });
+      toast.show(placed.commission && placed.commission_number
+        ? `${placedText} ${interpolate(t('commission.placed'), { amount: formatNumber(placed.commission), number: placed.commission_number })}`
+        : placedText);
       onPointsChanged();
     } catch (err) {
       const { message: friendlyMessage, action } = friendlyError(err);
@@ -610,6 +646,15 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
                     </li>
                   ))}
                 </ul>
+                {commission > 0 ? (
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-amber-300">
+                    <Gift className="h-4 w-4 shrink-0" aria-hidden="true" /> {interpolate(t('commission.earned'), { amount: formatNumber(commission) })}
+                  </p>
+                ) : commissionNudge > 0 && (
+                  <p className="flex items-center gap-1.5 text-xs text-ink-muted">
+                    <Gift className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {interpolate(t('commission.nudge'), { needed: formatNumber(commissionNudge), per: formatNumber(commissionPer100) })}
+                  </p>
+                )}
               </div>
             )}
           </Card>
@@ -632,7 +677,12 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
               ))}
               <li className="flex items-center justify-between bg-surface/50 px-4 py-3 text-sm">
                 <span className="text-ink-muted">{t('bet.totalBet')}</span>
-                <span className="font-semibold text-ink-soft">{rupees(lockedTotal)}</span>
+                <span className="text-right">
+                  <span className="block font-semibold text-ink-soft">{rupees(lockedTotal)}</span>
+                  {lockedCommission > 0 && (
+                    <span className="block text-xs text-amber-300">{interpolate(t('commission.included'), { amount: formatNumber(lockedCommission) })}</span>
+                  )}
+                </span>
               </li>
             </ul>
           </section>
@@ -653,6 +703,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-ink-strong">
                   {interpolate(t(pendingSorted.length === 1 ? 'bet.slipOne' : 'bet.slipMany'), { count: pendingSorted.length })} · {rupees(newTotal)}
+                  {commission > 0 && <span className="text-amber-300"> + {rupees(commission)} <Gift className="inline h-3.5 w-3.5 align-[-2px]" aria-hidden="true" /></span>}
                 </p>
                 <p className="flex items-center gap-2 text-xs text-ink-muted">
                   <span className="truncate">{t(`bet.name.${tab}` as TranslationKey)}</span>
@@ -721,9 +772,75 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
                 </li>
               ))}
             </ul>
+            {commission > 0 && (
+              <div className="mt-4 rounded-control border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                <p className="flex items-center gap-1.5 font-semibold text-amber-200">
+                  <Gift className="h-4 w-4 shrink-0" aria-hidden="true" /> {interpolate(t('commission.title'), { amount: formatNumber(commission) })}
+                </p>
+                <p className="mt-0.5 text-xs text-ink-muted">{interpolate(t('commission.hint'), { per: formatNumber(commissionPer100) })}</p>
+                <div role="radiogroup" aria-label={t('commission.pickLabel')} className="mt-2 flex flex-wrap gap-2">
+                  {pendingSorted.map((pick) => {
+                    const checked = commissionChoice !== 'other' && commissionTarget === pick.number;
+                    return (
+                      <button
+                        key={pick.number}
+                        type="button"
+                        role="radio"
+                        aria-checked={checked}
+                        disabled={saving}
+                        onClick={() => setCommissionChoice(pick.number)}
+                        className={`min-h-[36px] min-w-[44px] rounded-control border px-3 font-bold tabular-nums transition-colors ${
+                          checked ? 'border-amber-400 bg-amber-500 text-slate-950' : 'border-surface-strong bg-surface-raised text-ink-soft hover:bg-slate-700'
+                        }`}
+                      >
+                        {pick.number}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={commissionChoice === 'other'}
+                    disabled={saving}
+                    onClick={() => setCommissionChoice('other')}
+                    className={`min-h-[36px] rounded-control border px-3 font-semibold transition-colors ${
+                      commissionChoice === 'other' ? 'border-amber-400 bg-amber-500 text-slate-950' : 'border-surface-strong bg-surface-raised text-ink-soft hover:bg-slate-700'
+                    }`}
+                  >
+                    {t('commission.other')}
+                  </button>
+                </div>
+                {commissionChoice === 'other' && (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    aria-label={t('commission.otherInput')}
+                    value={commissionOther}
+                    disabled={saving}
+                    maxLength={betInfo.inputType === 'digit' ? 1 : betInfo.inputType === 'patti_combo' ? 5 : 2}
+                    placeholder={interpolate(t('common.example'), { value: betInfo.inputType === 'digit' ? '7' : betInfo.inputType === 'patti_combo' ? '123-6' : '45' })}
+                    onChange={(event) => setCommissionOther(event.target.value.replace(betInfo.inputType === 'patti_combo' ? /[^\d-]/g : /\D/g, ''))}
+                    className={`${INPUT} mt-2 w-36 py-1.5 text-sm`}
+                  />
+                )}
+                {commissionTarget ? (
+                  <p className="mt-2 text-amber-200">
+                    {interpolate(t('commission.onNumber'), { amount: formatNumber(commission), number: commissionTarget, win: formatNumber(commission * multiplier) })}
+                  </p>
+                ) : commissionOther.trim() !== '' && (
+                  <p className="mt-2 text-rose-300">{t('commission.otherInvalid')}</p>
+                )}
+              </div>
+            )}
             <div className="mt-4 space-y-2 rounded-control bg-surface-raised/70 p-3 text-sm">
               <div className="flex justify-between"><span className="text-ink-muted">{t('betslip.pickCount')}</span><span>{betSlip.pickCount}</span></div>
               <div className="flex justify-between"><span className="text-ink-muted">{t('betslip.totalCost')}</span><span className="font-bold text-ink-strong">{interpolate(t('betslip.totalCostValue'), { points: formatNumber(newTotal) })}</span></div>
+              {commission > 0 && (
+                <>
+                  <div className="flex justify-between"><span className="text-ink-muted">{t('commission.total')}</span><span className="text-amber-300">+₹{formatNumber(commission)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink-muted">{t('commission.totalPlayed')}</span><span>₹{formatNumber(newTotal + commission)}</span></div>
+                </>
+              )}
               <div className="flex justify-between"><span className="text-ink-muted">{t('betslip.balanceAfter')}</span><span /></div>
               <div className="flex justify-between pl-3"><span className="text-ink-muted">{t('betslip.play')}</span><span>₹{formatNumber(betSlip.playAfterBet)}</span></div>
               <div className="flex justify-between pl-3"><span className="text-ink-muted">{t('betslip.wallet')}</span><span>₹{formatNumber(betSlip.walletAfterBet)}</span></div>
@@ -756,7 +873,7 @@ export default function SelectionScreen({ game, onBack, onPointsChanged, onAddFu
               <Button
                 size="lg"
                 loading={saving}
-                disabled={!betOpen || insufficient || invalidEntry || exceedsSubmitLimit || pendingSorted.length === 0}
+                disabled={!betOpen || insufficient || invalidEntry || exceedsSubmitLimit || commissionInvalid || pendingSorted.length === 0}
                 onClick={() => { void handleSave(); }}
               >
                 {t('betslip.confirm')}

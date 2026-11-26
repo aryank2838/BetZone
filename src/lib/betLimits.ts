@@ -10,12 +10,15 @@ export interface PublicRules {
   turnover_multiplier: number;
   maximum_bet: number;
   maximum_submit: number;
+  /** Free stake per full ₹100 paid on one Matka slip (fixed at 5). */
+  commission_per_100?: number;
 }
 
 export interface BetLimits {
   maxPerBet: number;
   maxPerSubmit: number;
   quickStakes: readonly number[];
+  commissionPer100: number;
 }
 
 /** UI-only quick-pick stake buttons. */
@@ -29,6 +32,7 @@ export const FALLBACK_BET_LIMITS: BetLimits = {
   maxPerBet: 5000,
   maxPerSubmit: 20000,
   quickStakes: QUICK_STAKES,
+  commissionPer100: 0,
 };
 
 let rulesRequest: Promise<PublicRules | null> | null = null;
@@ -65,7 +69,12 @@ export function resetPublicRulesCache() {
 
 export function betLimitsFromRules(rules: PublicRules | null): BetLimits {
   if (!rules) return FALLBACK_BET_LIMITS;
-  return { maxPerBet: rules.maximum_bet, maxPerSubmit: rules.maximum_submit, quickStakes: QUICK_STAKES };
+  return {
+    maxPerBet: rules.maximum_bet,
+    maxPerSubmit: rules.maximum_submit,
+    quickStakes: QUICK_STAKES,
+    commissionPer100: typeof rules.commission_per_100 === 'number' ? rules.commission_per_100 : 0,
+  };
 }
 
 export function usePublicRules(): PublicRules | null {
