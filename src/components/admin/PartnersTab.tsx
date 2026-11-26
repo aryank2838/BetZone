@@ -99,7 +99,19 @@ export default function PartnersTab() {
       () => `${partner.name} is earning again from this week.`);
   };
 
-  const markPaid = (partner: AdminPartner, week: AdminPartner['weeks'][number]) => {
+  const remove = (partner: AdminPartner) => {
+    if (partner.due_total > 0) {
+      setNotice({ kind: 'err', text: `You still owe ${partner.name} ${rupees(partner.due_total)}. Pay and mark those weeks paid before removing them.` });
+      return;
+    }
+    if (!window.confirm(`Remove ${partner.name} as a partner? This week's share so far is dropped, their ${partner.player_count} player${partner.player_count === 1 ? '' : 's'} go back to you, and their weeks are cleared (paid weeks stay in the admin log). This cannot be undone.`)) return;
+    void run(`remove-${partner.user_id}`, () => supabase.rpc('admin_remove_partner', { p_user_id: partner.user_id }), (data) => {
+      const untagged = (data as { players_untagged?: number } | null)?.players_untagged ?? 0;
+      return `${partner.name} is no longer a partner.${untagged > 0 ? ` ${untagged} player${untagged === 1 ? '' : 's'} moved back to you.` : ''}`;
+    });
+  };
+
+  const markPaid =(partner: AdminPartner, week: AdminPartner['weeks'][number]) => {
     const utr = (utrs[week.id] ?? '').trim();
     if (!/^[A-Za-z0-9]{6,40}$/.test(utr)) { setNotice({ kind: 'err', text: 'Enter the UTR / reference number of your payment (6–40 letters or digits).' }); return; }
     void run(`paid-${week.id}`, () => supabase.rpc('admin_mark_partner_week_paid', { p_week_id: week.id, p_utr: utr }),
@@ -186,6 +198,7 @@ export default function PartnersTab() {
               {partner.active
                 ? <Button variant="ghost" loading={busy === `pause-${partner.user_id}`} disabled={busy !== null} onClick={() => pause(partner)}>Pause</Button>
                 : <Button variant="secondary" disabled={busy !== null} onClick={() => resume(partner)}>Turn back on</Button>}
+              <Button variant="ghost" className="text-rose-300 hover:text-rose-200" loading={busy === `remove-${partner.user_id}`} disabled={busy !== null} onClick={() => remove(partner)}>Remove</Button>
               <button
                 type="button"
                 onClick={() => setOpen(expanded ? null : partner.user_id)}
