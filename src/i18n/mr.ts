@@ -587,7 +587,7 @@ const mr: Record<keyof typeof en, string> = {
   'referral.copyLink': "लिंक कॉपी करा",
   'referral.copied': "इनव्हाइट लिंक कॉपी झाली. ती तुमच्या मित्रांना पाठवा.",
   'referral.copyFailed': "कॉपी झाले नाही. तुमची लिंक: {link}",
-  'referral.shareWhatsapp': "WhatsApp वर पाठवा",
+  'referral.share': "आमंत्रण लिंक पाठवा",
   'referral.shareText': "माझ्यासोबत BetZone वर या! माझ्या इनव्हाइट लिंकने साइन अप करा: {link} (इनव्हाइट कोड {code})",
   'referral.friendsJoined': "जोडलेले मित्र",
   'referral.earned': "मिळालेला बोनस",

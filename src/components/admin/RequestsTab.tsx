@@ -136,6 +136,7 @@ export default function RequestsTab(props: RequestsTabProps) {
           Add-money requests
         </SectionTitle>
         <RequestFilters filter={addFundsFilter} onChange={onAddFundsFilterChange} onSearch={() => onSearch('addFunds')} searchPlaceholder="Search name or UTR" />
+        <RangeTotals kind="add_funds" filter={addFundsFilter} refreshKey={addFundsRequests} />
         {loading ? <ListSkeleton rows={3} /> : sortedAddFunds.length === 0 ? (
           <Empty icon={<Plus className="mx-auto mb-2 h-5 w-5 text-ink-muted" />} text="No add-money requests match these filters." />
         ) : (
@@ -200,6 +201,7 @@ export default function RequestsTab(props: RequestsTabProps) {
           Withdrawal requests
         </SectionTitle>
         <RequestFilters filter={withdrawalFilter} onChange={onWithdrawalFilterChange} onSearch={() => onSearch('withdrawals')} searchPlaceholder="Search by name" />
+        <RangeTotals kind="withdrawals" filter={withdrawalFilter} refreshKey={withdrawals} />
         {loading ? <ListSkeleton rows={3} /> : sortedWithdrawals.length === 0 ? (
           <Empty icon={<Wallet className="mx-auto mb-2 h-5 w-5 text-ink-muted" />} text="No withdrawal requests match these filters." />
         ) : (
@@ -366,6 +368,75 @@ function RequestFilters({ filter, onChange, onSearch, searchPlaceholder }: {
         <Button variant="secondary" className="sm:col-span-2" onClick={onSearch}>Apply filters</Button>
       </div>
     </details>
+  );
+}
+
+interface RequestTotals {
+  approved_amount: number;
+  approved_count: number;
+  pending_amount: number;
+  pending_count: number;
+  rejected_amount: number;
+  rejected_count: number;
+}
+
+/**
+ * Total money in the chosen date range (and search), split by status. It is
+ * fetched from the database, so it counts every request, not just the loaded
+ * page. It refetches whenever the list below it reloads, using the filter that
+ * list was loaded with, so the two always agree.
+ */
+function RangeTotals({ kind, filter, refreshKey }: {
+  kind: 'add_funds' | 'withdrawals';
+  filter: AdminListFilter;
+  refreshKey: unknown;
+}) {
+  const { formatNumber, formatDate } = useFormat();
+  const [totals, setTotals] = useState<RequestTotals | null>(null);
+  const [error, setError] = useState(false);
+  const [applied, setApplied] = useState(filter);
+  // Take the filter when the list reloads, not on every keystroke in the form.
+  useEffect(() => { setApplied(filter); }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const { data, error: rpcError } = await supabase.rpc('admin_request_totals', {
+        p_kind: kind,
+        p_from: applied.from || null,
+        p_to: applied.to || null,
+        p_search: applied.search || null,
+      });
+      if (!active) return;
+      setError(!!rpcError);
+      setTotals(rpcError ? null : (data as RequestTotals));
+    })();
+    return () => { active = false; };
+  }, [kind, applied, refreshKey]);
+
+  const day = (value: string) => formatDate(`${value}T12:00:00+05:30`, { dateStyle: 'medium', timeZone: 'Asia/Kolkata' });
+  const range = applied.from && applied.to
+    ? `${day(applied.from)} – ${day(applied.to)}`
+    : applied.from ? `From ${day(applied.from)}` : applied.to ? `Up to ${day(applied.to)}` : 'All time';
+
+  if (error) return <p className="mb-3 text-xs text-rose-300">Couldn't load totals for this range.</p>;
+  return (
+    <div className="mb-3 rounded-card border border-surface-border bg-surface/60 p-4">
+      <p className="text-xs text-ink-muted">{range}{applied.search ? ` · “${applied.search}”` : ''}</p>
+      <div className="mt-1 flex items-baseline justify-between gap-3">
+        <p className="text-sm font-semibold text-ink-soft">{kind === 'add_funds' ? 'Total deposited' : 'Total withdrawn'}</p>
+        <p className={`text-2xl font-bold ${kind === 'add_funds' ? 'text-brand-400' : 'text-ink-strong'}`}>
+          {totals ? `₹${formatNumber(totals.approved_amount)}` : '…'}
+        </p>
+      </div>
+      {totals && (
+        <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+          <span>{totals.approved_count} approved</span>
+          <span>Pending ₹{formatNumber(totals.pending_amount)} ({totals.pending_count})</span>
+          <span>Rejected ₹{formatNumber(totals.rejected_amount)} ({totals.rejected_count})</span>
+        </p>
+      )}
+    </div>
   );
 }
 

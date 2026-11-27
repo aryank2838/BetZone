@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronUp, Copy, Gift, Share2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Copy, Gift } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { referralLink, whatsappShareUrl } from '@/lib/referral';
+import { referralLink } from '@/lib/referral';
+import ShareButton from '@/components/ShareButton';
 import { useToast } from '@/components/ui/toastContext';
 import { useFormat } from '@/i18n/useFormat';
 import { interpolate, useT } from '@/i18n/useT';
@@ -134,14 +135,11 @@ export default function ReferralCard({ data }: { data: MyReferral }) {
         </button>
       </div>
 
-      <a
-        href={whatsappShareUrl(shareText)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-control bg-[#25D366] px-4 text-sm font-bold text-slate-950 hover:brightness-110"
-      >
-        <Share2 className="h-4 w-4" aria-hidden="true" /> {t('referral.shareWhatsapp')}
-      </a>
+      <ShareButton
+        text={shareText}
+        label={t('referral.share')}
+        className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-control bg-emerald-500 px-4 text-sm font-bold text-slate-950 hover:brightness-110"
+      />
 
       <dl className="grid grid-cols-2 gap-2 text-center">
         <div className="rounded-control bg-surface-page/50 px-2 py-2">

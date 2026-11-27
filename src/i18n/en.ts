@@ -581,7 +581,7 @@ const en = {
   'referral.copyLink': "Copy link",
   'referral.copied': "Invite link copied. Paste it to your friends.",
   'referral.copyFailed': "Could not copy. Your link: {link}",
-  'referral.shareWhatsapp': "Share on WhatsApp",
+  'referral.share': "Share invite link",
   'referral.shareText': "Join me on BetZone! Sign up with my invite link: {link} (invite code {code})",
   'referral.friendsJoined': "Friends joined",
   'referral.earned': "Bonus earned",

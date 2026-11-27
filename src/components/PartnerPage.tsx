@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { CalendarCheck, Copy, Handshake, Share2, TrendingUp, Users, Wallet } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
-import { referralLink, whatsappShareUrl } from '@/lib/referral';
+import { referralLink } from '@/lib/referral';
+import ShareButton from '@/components/ShareButton';
 import { UPI_PATTERN, levelRanges, usePartnerDashboard, weekLabel, type PartnerClosedWeek } from '@/lib/partner';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, SectionTitle } from '@/components/ui/Card';
@@ -164,14 +165,11 @@ export default function PartnerPage({ onBack }: { onBack: () => void }) {
               <Copy className="h-4 w-4" aria-hidden="true" /> {t('referral.copyLink')}
             </button>
           </div>
-          <a
-            href={whatsappShareUrl(shareText)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-control bg-[#25D366] px-4 text-sm font-bold text-slate-950 hover:brightness-110"
-          >
-            <Share2 className="h-4 w-4" aria-hidden="true" /> {t('referral.shareWhatsapp')}
-          </a>
+          <ShareButton
+            text={shareText}
+            label={t('referral.share')}
+            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-control bg-amber-400 px-4 text-sm font-bold text-slate-950 hover:brightness-110"
+          />
         </Card>
 
         {/* Payout UPI */}

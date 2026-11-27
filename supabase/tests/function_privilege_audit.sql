@@ -40,6 +40,7 @@ INSERT INTO function_execute_allowlist (grantee, routine_name) VALUES
   ('authenticated', 'admin_preview_result'),
   ('authenticated', 'admin_process_add_funds'),
   ('authenticated', 'admin_process_withdrawal'),
+  ('authenticated', 'admin_request_totals'),
   ('authenticated', 'admin_set_admin'),
   ('authenticated', 'admin_send_test_push'),
   ('authenticated', 'admin_signup_funnel'),
