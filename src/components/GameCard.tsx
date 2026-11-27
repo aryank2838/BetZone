@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { ChevronRight, Clock } from 'lucide-react';
+import { BarChart3, ChevronRight, Clock } from 'lucide-react';
 import { GAME_LABELS, type GameResult, type GameStatus } from '@/types';
 import { countdownTone, formatClockTime, formatCountdown } from '@/lib/countdown';
 import type { GamePhase } from '@/lib/gameState';
@@ -128,11 +128,24 @@ export default function GameCard({ status, phase, result, nowMs, disabled, onOpe
         className={`overflow-hidden rounded-card border bg-surface/80 ${off ? 'border-dashed border-surface-strong opacity-75' : 'border-surface-border'}`}
         aria-label={name}
       >
-        {off || disabled ? (
-          <div className={rowClass} style={rowStyle}>{inner}</div>
-        ) : (
-          <button type="button" onClick={onOpen} className={`${rowClass} hover:bg-surface-raised/40`} style={rowStyle}>{inner}</button>
-        )}
+        <div className="flex items-stretch">
+          {off || disabled ? (
+            <div className={`${rowClass} min-w-0 flex-1`} style={rowStyle}>{inner}</div>
+          ) : (
+            <button type="button" onClick={onOpen} className={`${rowClass} min-w-0 flex-1 hover:bg-surface-raised/40`} style={rowStyle}>{inner}</button>
+          )}
+          {/* The chart stays open on closed days, days off and holidays. */}
+          {onOpenChart && (
+            <button
+              type="button"
+              onClick={onOpenChart}
+              aria-label={`${t('chart.open')} · ${name}`}
+              className="flex min-h-tap shrink-0 items-center gap-1.5 border-l border-surface-border px-3.5 text-sm font-semibold text-accent-400 hover:bg-surface-raised/40"
+            >
+              <BarChart3 className="h-4 w-4" aria-hidden="true" /> {t('chart.open')}
+            </button>
+          )}
+        </div>
       </article>
     );
   }
