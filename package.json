@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "test": "vitest run"
+    "test": "node scripts/vitest.mjs run"
   },
   "dependencies": {
     "@sentry/react": "^8.55.2",

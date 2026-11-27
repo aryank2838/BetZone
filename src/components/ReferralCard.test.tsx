@@ -24,13 +24,31 @@ const sample: MyReferral = {
 };
 
 describe('ReferralCard', () => {
-  it('shows the code, the offer, and a WhatsApp link with the invite link', () => {
+  it('shows the code, the offer, and shares the invite link through the phone share sheet', async () => {
+    const shareSpy = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'share', { value: shareSpy, configurable: true });
+    try {
+      render(<ReferralCard data={sample} />);
+      expect(screen.getByText('ABC234')).toBeTruthy();
+      expect(screen.getByText(/you get 10% of it, up to ₹200/i)).toBeTruthy();
+      expect(screen.getByText('₹150')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: /share invite link/i }));
+      await waitFor(() => expect(shareSpy).toHaveBeenCalledTimes(1));
+      expect(shareSpy.mock.calls[0][0].text).toContain(`${window.location.origin}/?ref=ABC234`);
+    } finally {
+      delete (navigator as { share?: unknown }).share;
+    }
+  });
+
+  it('opens WhatsApp with the invite link when there is no share sheet', () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
     render(<ReferralCard data={sample} />);
-    expect(screen.getByText('ABC234')).toBeTruthy();
-    expect(screen.getByText(/you get 10% of it, up to ₹200/i)).toBeTruthy();
-    const share = screen.getByRole('link', { name: /share on whatsapp/i }) as HTMLAnchorElement;
-    expect(decodeURIComponent(share.href)).toContain(`${window.location.origin}/?ref=ABC234`);
-    expect(screen.getByText('₹150')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /share invite link/i }));
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const url = String(openSpy.mock.calls[0][0]);
+    expect(url.startsWith('https://wa.me/?text=')).toBe(true);
+    expect(decodeURIComponent(url)).toContain(`${window.location.origin}/?ref=ABC234`);
+    openSpy.mockRestore();
   });
 
   it('lists friends with what each one earned', () => {
