@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { CalendarCheck, Copy, Handshake, Share2, Users, Wallet } from 'lucide-react';
+import { CalendarCheck, Copy, Handshake, Share2, TrendingUp, Users, Wallet } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { friendlyErrorDetails } from '@/lib/errors';
 import { referralLink, whatsappShareUrl } from '@/lib/referral';
-import { UPI_PATTERN, usePartnerDashboard, weekLabel, type PartnerClosedWeek } from '@/lib/partner';
+import { UPI_PATTERN, levelRanges, usePartnerDashboard, weekLabel, type PartnerClosedWeek } from '@/lib/partner';
 import PageHeader from '@/components/ui/PageHeader';
 import { Card, SectionTitle } from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
@@ -54,6 +54,12 @@ export default function PartnerPage({ onBack }: { onBack: () => void }) {
 
   const link = referralLink(data.code);
   const week = data.week;
+  const levels = data.uses_levels ? levelRanges(data.levels ?? [], formatNumber) : [];
+  const base = Math.max(week.net + week.carry_in, 0);
+  const currentLevel = (data.levels ?? []).reduce((found, level, index) => (level.min_profit <= base ? index : found), 0);
+  const nextLevel = data.uses_levels && week.next_level_min != null && week.next_level_percent != null
+    ? { amount: Math.max(week.next_level_min - base, 1), percent: week.next_level_percent }
+    : null;
   const shareText = interpolate(t('partner.shareText'), { link });
 
   const copyLink = async () => {
@@ -92,7 +98,7 @@ export default function PartnerPage({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="min-h-screen bg-surface-page text-ink">
-      <PageHeader title={t('partner.title')} subtitle={interpolate(t('partner.subtitle'), { percent: data.share_percent })} onBack={onBack} />
+      <PageHeader title={t('partner.title')} subtitle={interpolate(t(data.uses_levels ? 'partner.subtitleLevels' : 'partner.subtitle'), { percent: data.share_percent })} onBack={onBack} />
       <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 sm:px-5">
         {!data.active && <Alert tone="warning">{t('partner.paused')}</Alert>}
         {error && <Alert details={error.raw} onRetry={() => void reload()}>{error.message}</Alert>}
@@ -112,8 +118,34 @@ export default function PartnerPage({ onBack }: { onBack: () => void }) {
             {week.carry_in < 0 && <div className="flex justify-between"><dt className="text-ink-muted">{t('partner.carryIn')}</dt><dd className="tabular-nums text-rose-300">{rupees(week.carry_in)}</dd></div>}
             <div className="flex justify-between"><dt className="text-ink-muted">{t('partner.yourShare')}</dt><dd>{data.share_percent}%</dd></div>
           </dl>
+          {data.uses_levels && (
+            <p className="mt-3 rounded-control bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-200">
+              {nextLevel
+                ? interpolate(t('partner.nextLevel'), { amount: formatNumber(nextLevel.amount), percent: nextLevel.percent })
+                : t('partner.topLevel')}
+            </p>
+          )}
           <p className="mt-3 text-xs text-ink-muted">{t('partner.weekNote')}</p>
         </section>
+
+        {/* Levels */}
+        {levels.length > 0 && (
+          <Card className="space-y-3">
+            <SectionTitle icon={<TrendingUp className="h-4 w-4" aria-hidden="true" />}>{t('partner.levelsTitle')}</SectionTitle>
+            <p className="text-sm text-ink-soft">{t('partner.levelsHint')}</p>
+            <ul className="divide-y divide-surface-border rounded-control border border-surface-border">
+              {levels.map((level, index) => {
+                const current = index === currentLevel;
+                return (
+                  <li key={level.label} className={`flex items-center justify-between px-3 py-2 text-sm ${current ? 'bg-amber-500/10 font-semibold text-amber-200' : 'text-ink-soft'}`}>
+                    <span>{interpolate(t('partner.levelRow'), { range: level.label })}</span>
+                    <span className="tabular-nums">{level.percent}%</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        )}
 
         {/* Invite link */}
         <Card className="space-y-3">

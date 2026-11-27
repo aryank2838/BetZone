@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, ChevronUp, Handshake, RefreshCw, UserPlus, Users } from 'lucide-react';
+import { ChevronDown, ChevronUp, Handshake, Plus, RefreshCw, TrendingUp, UserPlus, Users, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { rawErrorMessage } from '@/lib/errors';
-import { weekLabel, type PartnerClosedWeek, type PartnerLiveWeek } from '@/lib/partner';
+import { weekLabel, type PartnerClosedWeek, type PartnerLevel, type PartnerLiveWeek } from '@/lib/partner';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -15,7 +15,8 @@ export interface AdminPartner {
   name: string;
   email: string | null;
   code: string;
-  share_percent: number;
+  /** NULL = uses the levels; a number = fixed percent for this partner. */
+  share_percent: number | null;
   active: boolean;
   payout_upi: string | null;
   created_at: string;
@@ -35,12 +36,13 @@ export default function PartnersTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [newLookup, setNewLookup] = useState('');
-  const [newPercent, setNewPercent] = useState('50');
+  const [newPercent, setNewPercent] = useState('');
   const [moveLookup, setMoveLookup] = useState('');
   const [movePartner, setMovePartner] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const [percentEdits, setPercentEdits] = useState<Record<string, string>>({});
   const [utrs, setUtrs] = useState<Record<string, string>>({});
+  const [levels, setLevels] = useState<Array<{ min: string; percent: string }>>([]);
 
   const rupees = (value: number) => `${value < 0 ? '−' : ''}₹${formatNumber(Math.abs(value))}`;
 
@@ -71,10 +73,37 @@ export default function PartnersTab() {
     }
   };
 
+  const loadLevels = useCallback(async () => {
+    const { data, error } = await supabase.rpc('admin_get_partner_levels');
+    if (!error && Array.isArray(data)) setLevels((data as PartnerLevel[]).map((level) => ({ min: String(level.min_profit), percent: String(level.percent) })));
+  }, []);
+
+  useEffect(() => { void loadLevels(); }, [loadLevels]);
+
+  const saveLevels = async () => {
+    const parsed = levels.map((level) => ({ min_profit: Number(level.min), percent: Number(level.percent) }));
+    const problem = parsed.length === 0 ? 'Add at least one level.'
+      : parsed[0].min_profit !== 0 ? 'The first level must start at ₹0.'
+      : parsed.some((level) => !Number.isInteger(level.min_profit) || level.min_profit < 0) ? 'Profit amounts must be whole rupees.'
+      : parsed.some((level) => !Number.isInteger(level.percent) || level.percent < 1 || level.percent > 100) ? 'Each percent must be a whole number from 1 to 100.'
+      : parsed.some((level, index) => index > 0 && level.min_profit <= parsed[index - 1].min_profit) ? 'Each level must start at a higher profit than the one before.'
+      : null;
+    if (problem) { setNotice({ kind: 'err', text: problem }); return; }
+    const ok = await run('levels', () => supabase.rpc('admin_save_partner_levels', { p_levels: parsed }),
+      () => 'Levels saved. They apply from this week; finished weeks keep their old percent.');
+    if (ok) await loadLevels();
+  };
+
+  const parsePercent = (value: string): number | null | undefined => {
+    if (value.trim() === '') return null;
+    const percent = Number(value);
+    return Number.isInteger(percent) && percent >= 1 && percent <= 100 ? percent : undefined;
+  };
+
   const addPartner = async () => {
-    const percent = Number(newPercent);
+    const percent = parsePercent(newPercent);
     if (!newLookup.trim()) { setNotice({ kind: 'err', text: 'Enter the player\'s invite code or email.' }); return; }
-    if (!Number.isInteger(percent) || percent < 1 || percent > 100) { setNotice({ kind: 'err', text: 'Share must be a whole number from 1 to 100.' }); return; }
+    if (percent === undefined) { setNotice({ kind: 'err', text: 'Fixed share must be a whole number from 1 to 100, or leave it empty to use the levels.' }); return; }
     const ok = await run('add', () => supabase.rpc('admin_save_partner', { p_lookup: newLookup.trim(), p_share_percent: percent }), (data) => {
       const tagged = (data as { tagged_players?: number } | null)?.tagged_players ?? 0;
       return tagged > 0 ? `Partner saved. ${tagged} player${tagged === 1 ? '' : 's'} they had already invited are now theirs.` : 'Partner saved.';
@@ -83,10 +112,10 @@ export default function PartnersTab() {
   };
 
   const savePercent = (partner: AdminPartner) => {
-    const percent = Number(percentEdits[partner.user_id] ?? partner.share_percent);
-    if (!Number.isInteger(percent) || percent < 1 || percent > 100) { setNotice({ kind: 'err', text: 'Share must be a whole number from 1 to 100.' }); return; }
+    const percent = parsePercent(percentEdits[partner.user_id] ?? (partner.share_percent == null ? '' : String(partner.share_percent)));
+    if (percent === undefined) { setNotice({ kind: 'err', text: 'Fixed share must be a whole number from 1 to 100, or leave it empty to use the levels.' }); return; }
     void run(`pct-${partner.user_id}`, () => supabase.rpc('admin_save_partner', { p_lookup: partner.code, p_share_percent: percent }),
-      () => `${partner.name} now gets ${percent}%. Finished weeks keep the old share.`);
+      () => `${partner.name} now ${percent == null ? 'uses the levels' : `gets a fixed ${percent}%`}. Finished weeks keep the old share.`);
   };
 
   const pause = (partner: AdminPartner) => {
@@ -144,13 +173,63 @@ export default function PartnersTab() {
       {totalDue > 0 && <Alert tone="warning">You owe partners {rupees(totalDue)} for finished weeks. Pay their UPI, then mark each week paid below.</Alert>}
 
       <Card className="space-y-3">
+        <SectionTitle icon={<TrendingUp className="h-4 w-4" aria-hidden="true" />}>Share levels</SectionTitle>
+        <p className="text-xs text-ink-muted">A partner's percent each week is set by that week's profit (net + carried loss). The whole week is paid at the level reached. Partners with a fixed percent ignore this. Changes apply from this week.</p>
+        <ul className="space-y-2">
+          {levels.map((level, index) => {
+            const next = levels[index + 1];
+            const upTo = next && next.min !== '' && Number.isFinite(Number(next.min)) ? `up to ₹${formatNumber(Number(next.min) - 1)}` : 'and above';
+            return (
+              <li key={index} className="grid grid-cols-[1fr_6rem_auto] items-center gap-2">
+                <label className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">₹</span>
+                  <input
+                    aria-label={`Level ${index + 1} starts at profit`} type="number" min={0} inputMode="numeric" value={level.min} disabled={index === 0}
+                    onChange={(event) => setLevels((current) => current.map((item, i) => (i === index ? { ...item, min: event.target.value } : item)))}
+                    className={`${INPUT} py-2 pl-7`}
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-muted">{upTo}</span>
+                </label>
+                <label className="relative">
+                  <input
+                    aria-label={`Level ${index + 1} percent`} type="number" min={1} max={100} inputMode="numeric" value={level.percent}
+                    onChange={(event) => setLevels((current) => current.map((item, i) => (i === index ? { ...item, percent: event.target.value } : item)))}
+                    className={`${INPUT} py-2 pr-7`}
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">%</span>
+                </label>
+                <button
+                  type="button"
+                  aria-label={`Remove level ${index + 1}`}
+                  disabled={index === 0}
+                  onClick={() => setLevels((current) => current.filter((_, i) => i !== index))}
+                  className="flex h-10 w-10 items-center justify-center rounded-control text-ink-muted hover:text-rose-300 disabled:invisible"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="ghost" icon={<Plus className="h-4 w-4" />} disabled={busy !== null || levels.length >= 10}
+            onClick={() => setLevels((current) => [...current, { min: '', percent: '' }])}
+          >
+            Add level
+          </Button>
+          <Button variant="secondary" loading={busy === 'levels'} disabled={busy !== null} onClick={() => void saveLevels()}>Save levels</Button>
+        </div>
+      </Card>
+
+      <Card className="space-y-3">
         <SectionTitle icon={<UserPlus className="h-4 w-4" aria-hidden="true" />}>Add a partner</SectionTitle>
-        <p className="text-xs text-ink-muted">They need a normal player account first. Their invite link becomes their partner link, and players they already invited become theirs.</p>
+        <p className="text-xs text-ink-muted">They need a normal player account first. Their invite link becomes their partner link, and players they already invited become theirs. Leave the percent empty to use the levels, or enter a fixed percent for this partner only.</p>
         <div className="grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
           <input aria-label="Partner's invite code or email" placeholder="Invite code or email" value={newLookup} onChange={(event) => setNewLookup(event.target.value)} className={INPUT} />
           <label className="relative">
-            <span className="sr-only">Share percent</span>
-            <input type="number" min={1} max={100} inputMode="numeric" value={newPercent} onChange={(event) => setNewPercent(event.target.value)} className={`${INPUT} pr-7`} />
+            <span className="sr-only">Fixed share percent (empty uses the levels)</span>
+            <input type="number" min={1} max={100} inputMode="numeric" placeholder="Levels" value={newPercent} onChange={(event) => setNewPercent(event.target.value)} className={`${INPUT} pr-7`} />
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-muted">%</span>
           </label>
           <Button loading={busy === 'add'} disabled={busy !== null} onClick={() => void addPartner()}>Make partner</Button>
@@ -168,7 +247,9 @@ export default function PartnersTab() {
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-2 font-semibold text-ink-strong">
                   {partner.name}
-                  {partner.active ? <Badge tone="success">{partner.share_percent}%</Badge> : <Badge tone="neutral">Paused</Badge>}
+                  {partner.active
+                    ? <Badge tone="success">{partner.share_percent == null ? `Levels · ${week.share_percent}% now` : `Fixed ${partner.share_percent}%`}</Badge>
+                    : <Badge tone="neutral">Paused</Badge>}
                   {partner.due_total > 0 && <Badge tone="warning">Owe {rupees(partner.due_total)}</Badge>}
                 </p>
                 <p className="truncate text-xs text-ink-muted">{partner.email} · code {partner.code} · {formatNumber(partner.player_count)} players</p>
@@ -180,15 +261,15 @@ export default function PartnersTab() {
               <div><dt className="text-[11px] text-ink-muted">This week ({weekLabel(week.week_start, week.week_end, LOCALE)}) bets</dt><dd className="tabular-nums">{rupees(week.bets)}</dd></div>
               <div><dt className="text-[11px] text-ink-muted">Winnings + bonuses</dt><dd className="tabular-nums">−{rupees(week.wins + week.bonuses)}</dd></div>
               <div><dt className="text-[11px] text-ink-muted">Net{week.carry_in < 0 ? ` (carry ${rupees(week.carry_in)})` : ''}</dt><dd className={`tabular-nums ${week.net < 0 ? 'text-rose-300' : ''}`}>{rupees(week.net)}</dd></div>
-              <div><dt className="text-[11px] text-ink-muted">Their share so far</dt><dd className="font-semibold tabular-nums text-amber-300">{rupees(week.projected_share)}</dd></div>
+              <div><dt className="text-[11px] text-ink-muted">Their share so far ({week.share_percent}%)</dt><dd className="font-semibold tabular-nums text-amber-300">{rupees(week.projected_share)}</dd></div>
             </dl>
 
             <div className="flex flex-wrap items-center gap-2">
               <label className="relative w-24">
-                <span className="sr-only">Share percent for {partner.name}</span>
+                <span className="sr-only">Fixed share percent for {partner.name} (empty uses the levels)</span>
                 <input
-                  type="number" min={1} max={100} inputMode="numeric"
-                  value={percentEdits[partner.user_id] ?? String(partner.share_percent)}
+                  type="number" min={1} max={100} inputMode="numeric" placeholder="Levels"
+                  value={percentEdits[partner.user_id] ?? (partner.share_percent == null ? '' : String(partner.share_percent))}
                   onChange={(event) => setPercentEdits((current) => ({ ...current, [partner.user_id]: event.target.value }))}
                   className={`${INPUT} py-2 pr-7`}
                 />

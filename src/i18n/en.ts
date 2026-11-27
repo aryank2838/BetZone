@@ -761,6 +761,12 @@ const en = {
   'partner.statusCarried': 'Nothing due · {amount} carried',
   'partner.statusNothing': 'Nothing due',
   'partner.howItWorks': 'Net profit = what your players bet − winnings paid to them − bonuses. Bets placed with free commission do not count; their winnings do.',
+  'partner.subtitleLevels': 'This week: {percent}% of net profit',
+  'partner.nextLevel': '₹{amount} more profit this week takes you to {percent}%.',
+  'partner.topLevel': 'You are on the top level this week.',
+  'partner.levelsTitle': 'Your levels',
+  'partner.levelsHint': 'The more profit your players make in a week, the bigger your percent. The whole week is paid at the level you reach.',
+  'partner.levelRow': '{range} profit',
 } as const;
 
 export default en;

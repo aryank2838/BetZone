@@ -767,6 +767,12 @@ const mr: Record<keyof typeof en, string> = {
   'partner.statusCarried': 'काही देणे नाही · {amount} पुढे जोडले',
   'partner.statusNothing': 'काही देणे नाही',
   'partner.howItWorks': 'नेट प्रॉफिट = तुमच्या प्लेयर्सची बेट − त्यांना दिलेली जिंकलेली रक्कम − बोनस. मोफत कमिशनची बेट मोजली जात नाही; तिची जिंकलेली रक्कम मोजली जाते.',
+  'partner.subtitleLevels': 'या आठवड्यात: नेट प्रॉफिटच्या {percent}%',
+  'partner.nextLevel': 'या आठवड्यात आणखी ₹{amount} प्रॉफिट झाल्यास तुम्हाला {percent}% मिळतील.',
+  'partner.topLevel': 'या आठवड्यात तुम्ही सर्वात वरच्या लेव्हलवर आहात.',
+  'partner.levelsTitle': 'तुमचे लेव्हल',
+  'partner.levelsHint': 'आठवड्यात तुमच्या प्लेयर्सकडून जितका जास्त प्रॉफिट, तितका मोठा तुमचा टक्का. पूर्ण आठवडा तुम्ही गाठलेल्या लेव्हलच्या टक्क्याने दिला जातो.',
+  'partner.levelRow': '{range} प्रॉफिट',
 };
 
 export default mr;

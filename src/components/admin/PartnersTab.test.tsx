@@ -89,7 +89,34 @@ describe('admin partners tab', () => {
     await screen.findByText('No partners yet.');
     fireEvent.change(screen.getByLabelText("Partner's invite code or email"), { target: { value: 'RAHUL2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Make partner' }));
-    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith('admin_save_partner', { p_lookup: 'RAHUL2', p_share_percent: 50 }));
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith('admin_save_partner', { p_lookup: 'RAHUL2', p_share_percent: null }));
     expect(await screen.findByText(/2 players they had already invited are now theirs/)).toBeInTheDocument();
+  });
+
+  it('shows a levels partner and saves edited levels', async () => {
+    const levelsPartner = { ...partner, share_percent: null, week: { ...partner.week, share_percent: 50 } };
+    rpcMock.mockImplementation((name: string) => Promise.resolve(
+      name === 'admin_list_partners' ? { data: [levelsPartner], error: null }
+        : name === 'admin_get_partner_levels' ? { data: [{ min_profit: 0, percent: 30 }, { min_profit: 1001, percent: 40 }, { min_profit: 2001, percent: 50 }], error: null }
+        : { data: [], error: null },
+    ));
+    render(<PartnersTab />);
+
+    expect(await screen.findByText('Levels · 50% now')).toBeInTheDocument();
+    const percent = await screen.findByLabelText('Level 3 percent');
+    expect(percent).toHaveValue(50);
+    expect(screen.getByText('up to ₹1,000')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Level 3 starts at profit'), { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save levels' }));
+    expect(screen.getByText('Each level must start at a higher profit than the one before.')).toBeInTheDocument();
+    expect(rpcMock).not.toHaveBeenCalledWith('admin_save_partner_levels', expect.anything());
+
+    fireEvent.change(screen.getByLabelText('Level 3 starts at profit'), { target: { value: '3001' } });
+    fireEvent.change(percent, { target: { value: '45' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save levels' }));
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledWith('admin_save_partner_levels', {
+      p_levels: [{ min_profit: 0, percent: 30 }, { min_profit: 1001, percent: 40 }, { min_profit: 3001, percent: 45 }],
+    }));
   });
 });

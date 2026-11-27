@@ -767,6 +767,12 @@ const hi: Record<keyof typeof en, string> = {
   'partner.statusCarried': 'कुछ बाकी नहीं · {amount} आगे जुड़ा',
   'partner.statusNothing': 'कुछ बाकी नहीं',
   'partner.howItWorks': 'नेट प्रॉफ़िट = आपके प्लेयर्स की बेट − उन्हें दी गई जीत − बोनस। मुफ़्त कमीशन वाली बेट नहीं गिनी जाती; उसकी जीत गिनी जाती है।',
+  'partner.subtitleLevels': 'इस हफ़्ते: नेट प्रॉफ़िट का {percent}%',
+  'partner.nextLevel': 'इस हफ़्ते ₹{amount} और प्रॉफ़िट होने पर आपको {percent}% मिलेगा।',
+  'partner.topLevel': 'इस हफ़्ते आप सबसे ऊँचे लेवल पर हैं।',
+  'partner.levelsTitle': 'आपके लेवल',
+  'partner.levelsHint': 'हफ़्ते में आपके प्लेयर्स से जितना ज़्यादा प्रॉफ़िट, उतना बड़ा आपका प्रतिशत। पूरा हफ़्ता उसी लेवल के प्रतिशत से मिलता है जहाँ आप पहुँचते हैं।',
+  'partner.levelRow': '{range} प्रॉफ़िट',
 };
 
 export default hi;

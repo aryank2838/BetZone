@@ -16,6 +16,26 @@ export interface PartnerWeekNumbers {
 
 export interface PartnerLiveWeek extends PartnerWeekNumbers {
   projected_share: number;
+  /** True when the percent comes from the levels, not a fixed percent. */
+  uses_levels?: boolean;
+  /** The next level up (the profit it starts at, and its percent), if there is one. */
+  next_level_min?: number | null;
+  next_level_percent?: number | null;
+}
+
+/** One level: a week's profit from min_profit (whole rupees) up pays percent. */
+export interface PartnerLevel {
+  min_profit: number;
+  percent: number;
+}
+
+/** "₹0 – ₹1,000", "₹1,001 – ₹2,000", "₹2,001+" for each level, in order. */
+export function levelRanges(levels: PartnerLevel[], formatNumber: (value: number) => string): Array<{ label: string; percent: number }> {
+  return levels.map((level, index) => {
+    const next = levels[index + 1];
+    const from = `₹${formatNumber(level.min_profit)}`;
+    return { label: next ? `${from} – ₹${formatNumber(next.min_profit - 1)}` : `${from}+`, percent: level.percent };
+  });
 }
 
 export type PartnerWeekStatus = 'due' | 'paid' | 'nothing_due';
@@ -40,7 +60,10 @@ export interface PartnerPlayer {
 
 export interface PartnerDashboard {
   code: string;
+  /** This week's percent: the current level, or the fixed percent. */
   share_percent: number;
+  uses_levels?: boolean;
+  levels?: PartnerLevel[];
   active: boolean;
   payout_upi: string | null;
   player_count: number;

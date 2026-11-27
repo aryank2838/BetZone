@@ -71,6 +71,26 @@ describe('partner dashboard', () => {
     await waitFor(() => expect(rpcMock).toHaveBeenCalledWith('partner_set_payout_upi', { p_upi: 'rahul@okaxis' }));
   });
 
+  it('shows the levels and how much more profit reaches the next one', async () => {
+    rpcMock.mockResolvedValue({
+      data: {
+        ...dashboard,
+        share_percent: 40,
+        uses_levels: true,
+        levels: [{ min_profit: 0, percent: 30 }, { min_profit: 1001, percent: 40 }, { min_profit: 2001, percent: 50 }],
+        week: { ...dashboard.week, net: 1700, carry_in: -200, share_percent: 40, projected_share: 600, uses_levels: true, next_level_min: 2001, next_level_percent: 50 },
+      },
+      error: null,
+    });
+    render(<PartnerPage onBack={vi.fn()} />);
+
+    expect(await screen.findByText('This week: 40% of net profit')).toBeInTheDocument();
+    expect(screen.getByText('₹501 more profit this week takes you to 50%.')).toBeInTheDocument();
+    expect(screen.getByText('₹0 – ₹1,000 profit')).toBeInTheDocument();
+    expect(screen.getByText('₹1,001 – ₹2,000 profit').parentElement).toHaveClass('font-semibold');
+    expect(screen.getByText('₹2,001+ profit')).toBeInTheDocument();
+  });
+
   it('says so when the account is not a partner', async () => {
     rpcMock.mockResolvedValue({ data: null, error: null });
     render(<PartnerPage onBack={vi.fn()} />);
